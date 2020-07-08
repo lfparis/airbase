@@ -1,0 +1,11 @@
+.DS_store
+.eggs
+.tox
+*egg-info
+*__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache\
+.env
+.cache
+*.todo
