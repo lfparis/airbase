@@ -1,6 +1,7 @@
 # Airtable Python Wrapper
 
 ### Asynchronous
+Requires CPython 3.8
 ```python
 import asyncio
 from airbase import AirtableAsync as Airtable
@@ -119,6 +120,7 @@ if __name__ == "__main__":
 ```
 
 ### Synchronous
+Works in ironpython and cpython 2.7 and beyond
 ```python
 from airbase import Airtable
 
