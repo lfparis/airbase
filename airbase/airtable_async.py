@@ -22,6 +22,8 @@ logger = Logger.start(__name__)
 
 
 class BaseAirtable:
+    retries = 5
+
     def _is_success(self, res: ClientResponse) -> bool:
         if res.status >= 200 and res.status < 300:
             return True
@@ -123,14 +125,22 @@ class Airtable(BaseAirtable):
                 self._bases_by_name = {base.name: base for base in self.bases}
                 return self.bases
 
-    async def get_base(self, value: str, key: str = "id"):
-        assert key in ("id", "name")
+    async def get_base(self, value: str, key: str):
+        assert key in (None, "id", "name")
         if not getattr(self, "bases", None):
             await self.get_bases()
         if key == "name":
             return self._bases_by_name.get(value)
         elif key == "id":
             return self._bases_by_id.get(value)
+        else:
+            bases = [
+                base
+                for base in self.bases
+                if base.name == value or base.id == value
+            ]
+            if bases:
+                return bases[0]
 
     async def get_enterprise_account(
         self, enterprise_account_id, logging_level="info"
@@ -199,6 +209,7 @@ class Base(BaseAirtable):
         """
         self.id = base_id
         self.name = name
+        self.permission_level = permission_level
         self.url = "{}/bases/{}".format(META_URL, self.id)
 
         self._session = session
@@ -229,14 +240,22 @@ class Base(BaseAirtable):
                 }
                 return self.tables
 
-    async def get_table(self, value: str, key: str = "id"):
-        assert key in ("id", "name")
+    async def get_table(self, value: str, key: str):
+        assert key in (None, "id", "name")
         if not getattr(self, "tables", None):
             await self.get_tables()
         if key == "name":
             return self._tables_by_name.get(value)
         elif key == "id":
             return self._tables_by_id.get(value)
+        else:
+            tables = [
+                table
+                for table in self.tables
+                if table.name == value or table.id == value
+            ]
+            if tables:
+                return tables[0]
 
 
 class Table(BaseAirtable):

@@ -125,6 +125,7 @@ class Base(Airtable):
         self.id = base_id
         self.url = "{}/bases/{}".format(META_URL, self.id)
         self.name = name
+        self.permission_level = permission_level
         self.auth = auth
         self.log = logging_level
 
