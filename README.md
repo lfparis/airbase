@@ -37,11 +37,11 @@ async def main() -> None:
         await base.get_tables()
 
         # Get one table by name
-        table = await at.get_table(table_key, key="name")
+        table = await base.get_table(table_key, key="name")
         # Get one table by id
-        table = await at.get_table(table_key, key="id")
+        table = await base.get_table(table_key, key="id")
         # Get one table by either id or name
-        table = await at.get_table(table_key)
+        table = await base.get_table(table_key)
 
         # Base Attributes
         print(table.base)
@@ -156,7 +156,7 @@ def main() -> None:
     base.get_tables()
 
     # Get one table by name
-    table = at.get_table(table_key)
+    table = base.get_table(table_key)
     # NOT IMPLEMENTED - Get one table by id
     # table = at.get_table(table_key, key="id")
     # NOT IMPLEMENTED - Get one table by either id or name
