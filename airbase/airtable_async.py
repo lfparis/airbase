@@ -13,6 +13,7 @@ from aiohttp import (
     ClientResponse,
 )
 from json.decoder import JSONDecodeError
+from typing import Any, Dict, Iterable, List  # Optional, Union
 
 from .utils import Logger, HTTPSemaphore
 from .urls import BASE_URL, META_URL
@@ -104,7 +105,7 @@ class Airtable(BaseAirtable):
         self._api_key = key or str(os.environ.get("AIRTABLE_API_KEY"))
         self.auth = {"Authorization": "Bearer {}".format(self.api_key)}
 
-    async def get_bases(self) -> list:
+    async def get_bases(self) -> List[Base]:  # noqa: F821
         async with self.semaphore:
             url = "{}/bases".format(META_URL)
             res = await self._request("get", url)
@@ -123,7 +124,7 @@ class Airtable(BaseAirtable):
                 ]
                 self._bases_by_id = {base.id: base for base in self.bases}
                 self._bases_by_name = {base.name: base for base in self.bases}
-                return self.bases
+        return self.bases
 
     async def get_base(self, value: str, key: str):
         assert key in (None, "id", "name")
@@ -217,7 +218,7 @@ class Base(BaseAirtable):
 
         self.log = logging_level
 
-    async def get_tables(self) -> list:
+    async def get_tables(self) -> List[Table]:  # noqa: F821
         async with self.semaphore:
             url = "{}/tables".format(self.url)
             res = await self._request("get", url)
@@ -238,7 +239,7 @@ class Base(BaseAirtable):
                 self._tables_by_name = {
                     table.name: table for table in self.tables
                 }
-                return self.tables
+        return self.tables
 
     async def get_table(self, value: str, key: str):
         assert key in (None, "id", "name")
@@ -295,7 +296,7 @@ class Table(BaseAirtable):
         self._session = base._session
 
     @staticmethod
-    def _basic_log_msg(content: list) -> str:
+    def _basic_log_msg(content: Iterable) -> str:
         """
         Constructs a basic logger message
         """
@@ -329,7 +330,7 @@ class Table(BaseAirtable):
         """
         return f"{BASE_URL}/{self.base.id}/{urllib.parse.quote(self.name)}"
 
-    async def _multiple(self, func, records: list) -> None:
+    async def _multiple(self, func, records: list) -> bool:
         """
         Posts/Patches/Deletes records to a table in batches of 10.
 
@@ -373,7 +374,7 @@ class Table(BaseAirtable):
             logger.error(
                 f"{res.status}: Failed to get record: <{record_id}> from table: {self.name} -> {data.get('error')}"  # noqa: E501
             )
-            return
+            return {}
 
     async def get_records(
         self,
@@ -391,7 +392,7 @@ class Table(BaseAirtable):
         Returns:
             records (``list``): If succesful, a list of existing records (``dictionary``).
         """  # noqa
-        params = {}
+        params: Dict[str, Any] = {}
 
         # filters
         if filter_by_fields:

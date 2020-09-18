@@ -1,11 +1,139 @@
 from __future__ import absolute_import
 
-# import copy
+import pandas as pd
+
+from typing import List
 
 from .utils import Logger
 
 
 logger = Logger.start(__name__)
+
+
+async def compare(
+    df_1: pd.DataFrame, df_2: pd.DataFrame, primary_keys: List[str]
+) -> pd.DataFrame:
+    """
+    Compare two pandas DataFrames and return a DataFrame with rows sorted by CRUD operation
+
+    Args:
+        df_1 (``pd.DataFrame``): DataFrame to compare (i.e. new payload)
+        df_2 (``pd.DataFrame``): DataFrame to compare against (i.e. existing data)
+        primary_keys(``list``): List of `str`` of the name of the primary keys to join the DataFrames
+
+    Returns:
+        pd.DataFrame
+    """  # noqa: E501
+
+    # list of headers
+    df_1_headers: List[str] = df_1.columns.values.tolist()
+    df_2_headers: List[str] = df_2.columns.values.tolist()
+
+    # combined and overlapping headers for dropping columns later
+    combined_headers: set = set(df_1_headers) | set(df_2_headers)
+    overlapping_headers: set = set(df_1_headers) & set(df_2_headers)
+    # list of overlapping_headers without primary keys
+    reduced_headers_a: List[str] = list(
+        overlapping_headers - set(primary_keys)
+    )
+    # list of combined_headers without primary keys
+    reduced_headers_b: List[str] = list(combined_headers - set(primary_keys))
+
+    # full outer join of both DataFrames on the primary_keys
+    # where the left is df_1 (with suffix '_x' applied to its column names)
+    #  and the right is df_2 (with suffix '_y' applied to its column names)
+    combined_df: pd.DataFrame = df_1.merge(
+        df_2, how="outer", on=primary_keys, indicator=True
+    )
+
+    # rows to be created are found by looking at unique rows in df_1 (left)
+    create_df: pd.DataFrame = (
+        combined_df.loc[lambda x: x["_merge"] == "left_only"]
+        .drop(
+            columns=[f"{other_header}_y" for other_header in reduced_headers_a]
+        )  # df_2 columns are dropped
+        .rename(
+            columns={
+                f"{other_header}_x": other_header
+                for other_header in reduced_headers_a
+            }
+        )  # df_1 columns are renamed back to original (without suffix)
+        .drop(columns=["_merge"])  # _merge indicator column is dropped
+    )
+
+    # rows to be deleted are found by looking at unique rows in df_2 (right)
+    delete_df: pd.DataFrame = (
+        combined_df.loc[lambda x: x["_merge"] == "right_only"]
+        .drop(
+            columns=[f"{other_header}_x" for other_header in reduced_headers_a]
+        )  # df_1 columns are dropped
+        .rename(
+            columns={
+                f"{other_header}_y": other_header
+                for other_header in reduced_headers_a
+            }
+        )  # df_1 columns are renamed back to original (without suffix)
+        .drop(columns=["_merge"])  # _merge indicator column is dropped
+    )
+
+    # rows to be updated are found by looking at rows in df_1 (left)
+    # that differ from df_2 (right) minus the rows to be created (create_df)
+
+    # full outer join of both DataFrames on no keys
+    # where the left is df_1 (with suffix '_x' applied to its column names)
+    #  and the right is df_2 (with suffix '_y' applied to its column names)
+    df_1_unique_rows: pd.DataFrame = (
+        df_1.merge(df_2, how="outer", indicator=True, sort=True)
+        .loc[
+            lambda x: x["_merge"] == "left_only"
+        ]  # only df_1 unique rows are kept
+        .drop(columns=["_merge"])  # _merge indicator column is dropped
+    )
+
+    # full outer join of both DataFrames on no primary keys
+    # where the left is df_1_unique_rows
+    # (with suffix '_x' applied to its column names)
+    # and the right is create_df
+    # (with suffix '_y' applied to its column names)
+    update_df: pd.DataFrame = (
+        df_1_unique_rows.merge(
+            create_df, indicator=True, how="outer", on=primary_keys
+        )
+        .loc[
+            lambda x: x["_merge"] != "both"
+        ]  # only df_1_unique_rows unique rows are kept
+        .drop(
+            columns=[f"{other_header}_y" for other_header in reduced_headers_b]
+        )  # create_df columns are dropped
+        .rename(
+            columns={
+                f"{other_header}_x": other_header
+                for other_header in reduced_headers_b
+            }
+        )  # df_1_unique_rows columns are renamed back to original
+        .drop(columns=["_merge"])  # _merge indicator column is dropped
+    )
+
+    # insert crud_type for each
+    create_df.insert(
+        loc=len(df_1_headers),
+        column="crud_type",
+        value=["create"] * create_df.shape[0],
+    )
+
+    update_df.insert(
+        loc=len(df_1_headers),
+        column="crud_type",
+        value=["update"] * update_df.shape[0],
+    )
+
+    delete_df.insert(
+        loc=len(df_2_headers),
+        column="crud_type",
+        value=["delete"] * delete_df.shape[0],
+    )
+
+    return create_df.append(update_df, sort=True).append(delete_df, sort=True)
 
 
 async def is_record(value):

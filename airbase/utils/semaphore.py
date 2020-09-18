@@ -19,7 +19,7 @@ class HTTPSemaphore(BoundedSemaphore):
         **kwargs,
     ) -> None:
         """
-        https://forge.autodesk.com/en/docs/data/v2/developers_guide/rate-limiting/dm-rate-limits/
+        Bound calls / Rate Limit
         """  # noqa: E501
         self.rate = float(interval) / float(max_calls)
         # self.max = int(max_calls / interval) + 1

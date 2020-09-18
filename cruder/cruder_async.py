@@ -7,6 +7,7 @@ import we.airflow.plugins.utils.snowflake as sf
 
 from airflow.contrib.hooks.snowflake_hook import SnowflakeHook
 from gspread import authorize
+from typing import Iterable, Optional
 
 from .airtable import AirtableAsync as Airtable
 from .airtable import tools_async as at_tools
@@ -107,6 +108,33 @@ class Cruder:
             )
         logger.info(f"Fetched {df.shape[0]} rows/records from Snowflake")
         return df
+
+    @staticmethod
+    async def convert_to_df(
+        source: Optional[Iterable] = None, format: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        Get SQL query formatted for airtable
+
+        Args:
+            df: pandas DataFrame
+
+        Kwargs:
+            output (default="records"): "records" or "rows"
+
+        Return:
+            data: If succesful, list of records or rows
+        """  # noqa: E501
+        assert source in (
+            "records",
+            "rows",
+        ), "{} is not an acceptable output type".format(source)
+
+        if isinstance(source, dict):
+            pass
+
+        elif isinstance(source, list):
+            pass
 
     @staticmethod
     async def convert_df(df: pd.DataFrame, output: str = "records") -> list:
