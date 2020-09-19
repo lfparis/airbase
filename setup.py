@@ -10,7 +10,7 @@ setup(
     download_url="",
     version="0.0.1",
     install_requires=["aiohttp", "pandas"],
-    python_requires="!=2.7.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*, !=3.7.*",  # noqa: E501
+    python_requires="!=2.7.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*",  # noqa: E501
     keywords=["airtable", "api", "async", "async.io"],
     license="The MIT License (MIT)",
     classifiers=[
@@ -20,6 +20,7 @@ setup(
         "Intended Audience :: Developers",
         "Programming Language :: Python",
         "Topic :: Software Development",
+        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: Implementation :: CPython",
     ],
