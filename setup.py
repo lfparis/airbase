@@ -7,7 +7,7 @@ setup(
     author="Luis Felipe Paris",
     author_email="lfparis@gmail.com",
     url="https://github.com/lfparis/airbase",
-    download_url="https://github.com/lfparis/airbase/archive/0.0.1.tar.gz",
+    download_url="https://github.com/lfparis/airbase/archive/0.0.1a.tar.gz",
     version="0.0.1a",
     install_requires=["aiohttp", "pandas"],
     python_requires="!=2.7.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*",  # noqa: E501
