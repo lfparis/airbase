@@ -1,41 +1,26 @@
-# from setuptools import setup
-# import os
+from distutils.core import setup
 
-# here = os.path.abspath(os.path.dirname(__file__))
-
-# about = {}
-# with open(os.path.join(here, "airtable", "__version__.py"), mode="r") as f:
-#     exec(f.read(), about)
-
-# setup_requires = ["pytest-runner"]
-# install_requires = ["requests>=2"]
-# tests_require = ["requests-mock", "requests", "mock"]
-
-# setup(
-#     name=about["__name__"],
-#     description=about["__description__"],
-#     author=about["__author__"],
-#     author_email=about["__authoremail__"],
-#     url=about["__url__"],
-#     version=about["__version__"],
-#     packages=["airtable"],
-#     setup_requires=setup_requires,
-#     install_requires=install_requires,
-#     tests_require=tests_require,
-#     python_requires="!=2.7.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*",
-#     keywords=["airtable", "api"],
-#     license=about["__license__"],
-#     classifiers=[
-#         "Development Status :: 4 - Beta",
-#         "Environment :: Console",
-#         "Intended Audience :: Developers",
-#         "Programming Language :: Python",
-#         "Topic :: Software Development",
-#         "Programming Language :: Python",
-#         "Programming Language :: Python :: 3.5",
-#         "Programming Language :: Python :: 3.6",
-#         "Programming Language :: Python :: 3.7",
-#         "Programming Language :: Python :: 3.8",
-#         "Programming Language :: Python :: Implementation :: CPython",
-#     ],
-# )
+setup(
+    name="airbase",
+    packages=["airbase"],
+    description="A async Python API Wrapper for the Airtable API",
+    author="Luis Felipe Paris",
+    author_email="lfparis@gmail.com",
+    url="https://github.com/lfparis/airbase",
+    download_url="",
+    version="0.0.1",
+    install_requires=["aiohttp", "pandas"],
+    python_requires="!=2.7.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*, !=3.7.*",  # noqa: E501
+    keywords=["airtable", "api", "async", "async.io"],
+    license="The MIT License (MIT)",
+    classifiers=[
+        "Development Status :: 2 - Pre-Alpha",
+        "Environment :: Console",
+        "Framework :: AsyncIO",
+        "Intended Audience :: Developers",
+        "Programming Language :: Python",
+        "Topic :: Software Development",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: Implementation :: CPython",
+    ],
+)
