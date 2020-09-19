@@ -1,7 +1,5 @@
 from __future__ import absolute_import
 
-import sys
-
 from collections import deque
 from json import dumps
 from pprint import pformat
@@ -12,9 +10,7 @@ except ImportError:
     from collections import Iterable, Mapping
 
 from .logger import Logger  # noqa
-
-if sys.version_info >= (3, 7):
-    from .semaphore import HTTPSemaphore  # noqa: F401
+from .semaphore import HTTPSemaphore  # noqa: F401
 
 
 def pretty_print(obj, sort=True, _print=True):
