@@ -10,3 +10,10 @@
 .cache
 *.todo
 mypy.ini
+
+.env
+.vscode
+.venv
+
+dist/
+MANIFEST

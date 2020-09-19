@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(
-    name="airbase",
+    name="airtable-async",
     packages=["airbase"],
     description="A async Python API Wrapper for the Airtable API",
     author="Luis Felipe Paris",

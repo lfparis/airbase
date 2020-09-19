@@ -1,4 +1,14 @@
-# Airtable Python Wrapper
+# Asynchronous Airtable Python Wrapper
+
+## Installing
+```bash
+pip install airtable-async
+```
+
+## Documentation
+*coming soon*
+
+## Example
 
 ```python
 import asyncio
@@ -116,3 +126,7 @@ async def main() -> None:
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+## License
+
+[MIT](https://opensource.org/licenses/MIT)
