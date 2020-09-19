@@ -105,7 +105,7 @@ class Airtable(BaseAirtable):
         self._api_key = key or str(os.environ.get("AIRTABLE_API_KEY"))
         self.auth = {"Authorization": "Bearer {}".format(self.api_key)}
 
-    async def get_bases(self) -> List[Base]:  # noqa: F821
+    async def get_bases(self) -> List:  # noqa: F821
         async with self.semaphore:
             url = "{}/bases".format(META_URL)
             res = await self._request("get", url)
@@ -218,7 +218,7 @@ class Base(BaseAirtable):
 
         self.log = logging_level
 
-    async def get_tables(self) -> List[Table]:  # noqa: F821
+    async def get_tables(self) -> List:  # noqa: F821
         async with self.semaphore:
             url = "{}/tables".format(self.url)
             res = await self._request("get", url)
