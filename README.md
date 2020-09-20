@@ -1,9 +1,13 @@
 # Asynchronous Airtable Python Wrapper
 
+[![Build Status](https://travis-ci.com/lfparis/airtable-async.svg?branch=master)](https://travis-ci.com/lfparis/airtable-async)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/airtable-async.svg?label=pypi%20downloads)](https://pypi.org/project/airtable-async/)
+
 ## Installing
 ```bash
 pip install airtable-async
 ```
+Requirements: Python 3.7+
 
 ## Documentation
 *coming soon*
