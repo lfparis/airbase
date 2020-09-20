@@ -3,8 +3,6 @@ language: python
 git:
   depth: 2
 python:
-  - "3.5"
-  - "3.6"
   - "3.7"
   - "3.8"
 matrix:
@@ -17,6 +15,6 @@ install:
   - pip install tox tox-travis
 script: tox
 after_success:
-  - pip install pytest requests requests-mock mock coveralls
+  - pip install pytest aiohttp coveralls
   - coverage run --source=airtable setup.py test
   - coveralls

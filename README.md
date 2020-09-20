@@ -4,6 +4,7 @@
 ```bash
 pip install airtable-async
 ```
+Requirements: Python 3.7+
 
 ## Documentation
 *coming soon*

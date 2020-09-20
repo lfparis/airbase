@@ -1,14 +1,10 @@
 pytest
 pytest-cov
+pytest-asyncio
 coveralls
 aiohttp
 flake8
 tox-travis
-
-sphinx
-sphinx-rtd-theme
-sphinxcontrib-napoleon
-sphinx-autoapi
 
 wheel
 twine
