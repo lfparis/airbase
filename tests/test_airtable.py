@@ -1,21 +1,20 @@
 import asyncio
+import pytest
+import sys
 
-# imppythoort pytest
-# import sys
+from typing import List
+from airbase.airtable import Airtable, Base
 
-# from typing import List
-from airbase import Airtable
-
-# if sys.version_info[:2] < (3, 6):
-#     pass
+if sys.version_info[:2] < (3, 6):
+    pass
 
 
-# @pytest.mark.asyncio
+@pytest.mark.asyncio
 async def main() -> None:
     async with Airtable() as at:
         # Get all bases for a user
         await at.get_bases()
-        # assert isinstance(at.bases, List[Base])
+        assert isinstance(at.bases, List[Base])
 
 
 if __name__ == "__main__":
