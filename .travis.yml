@@ -14,6 +14,6 @@ install:
   - pip install tox tox-travis
 script: tox
 after_success:
-  - pip install pytest aiohttp coveralls
+  - pip install pytest pytest-asyncio aiohttp coveralls
   - coverage run --source=airbase setup.py test
   - coveralls
