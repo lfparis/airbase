@@ -28,4 +28,5 @@ clean:
 	python -c "import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.py[co]')]"
 	python -c "import pathlib; [p.rmdir() for p in pathlib.Path('.').rglob('pytest_cache')]"
 	rm -rdf ./dist
+	rm -rdf ./build
 	rm -rdf  airbase.egg-info
