@@ -2,7 +2,6 @@ build/
 dist/
 docs/build
 
-
 .DS_store
 .eggs
 .tox
@@ -18,9 +17,5 @@ coverage.xml
 .env
 .vscode
 .venv
-
-
-
-
 
 test.py
