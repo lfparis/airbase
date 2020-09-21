@@ -1,4 +1,3 @@
-import os
 import pytest
 import sys
 
@@ -10,7 +9,7 @@ if sys.version_info[:2] < (3, 6):
 
 @pytest.mark.asyncio
 async def test_airtable() -> None:
-    async with Airtable(api_key=os.environ["AIRTABLE_API_KEY"]) as at:
+    async with Airtable() as at:
         # Get all bases for a user
         await at.get_bases()
         assert getattr(at, "bases", None)
