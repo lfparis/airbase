@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from collections import deque
 from json import dumps
 from pprint import pformat
+from typing import Any, Union
 
 try:
     from collections.abc import Iterable, Mapping
@@ -13,7 +14,7 @@ from .logger import Logger  # noqa
 from .semaphore import HTTPSemaphore  # noqa: F401
 
 
-def pretty_print(obj, sort=True, _print=True):
+def pretty_print(obj: Any, sort: bool = True, _print: bool = True) -> str:
     """ """
     try:
         if isinstance(obj, Mapping):
@@ -27,14 +28,15 @@ def pretty_print(obj, sort=True, _print=True):
 
     if _print:
         print(output)
+
     return output
 
 
-def _pretty_print(obj, sort=True):
+def _pretty_print(obj: Union[Mapping, Iterable], sort: bool = True) -> str:
     return dumps(obj, sort_keys=sort, indent=4, ensure_ascii=False)
 
 
-def _obj_to_dict(obj):
+def _obj_to_dict(obj: Any) -> dict:
     try:
         d = {pformat(obj): _clean(obj.__dict__)}
     except AttributeError:
@@ -42,7 +44,9 @@ def _obj_to_dict(obj):
     return d
 
 
-def _clean(obj, is_mapping=True):
+def _clean(
+    obj: Union[Mapping, Iterable], is_mapping=True
+) -> Union[Mapping, Iterable]:
     if is_mapping:
         clean_data = {}
         iterable = obj.items()

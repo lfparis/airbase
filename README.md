@@ -1,7 +1,8 @@
 # Asynchronous Airtable Python Wrapper
 
-[![Build Status](https://travis-ci.com/lfparis/airtable-async.svg?branch=master)](https://travis-ci.com/lfparis/airtable-async)
+[![Build Status](https://travis-ci.org/lfparis/airbase.svg?branch=master)](https://travis-ci.org/lfparis/airbase)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/airtable-async.svg?label=pypi%20downloads)](https://pypi.org/project/airtable-async/)
+[![Coverage Status](https://coveralls.io/repos/github/lfparis/airbase/badge.svg?branch=master)](https://coveralls.io/github/lfparis/airbase?branch=master)
 
 ## Installing
 ```bash

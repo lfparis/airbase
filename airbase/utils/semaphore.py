@@ -11,6 +11,8 @@ from time import sleep as tsleep
 
 
 class HTTPSemaphore(BoundedSemaphore):
+    """ """
+
     def __init__(
         self,
         value: int = 10,
