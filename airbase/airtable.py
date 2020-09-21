@@ -13,7 +13,7 @@ from aiohttp import (
     ClientResponse,
 )
 from json.decoder import JSONDecodeError
-from typing import Any, Dict, Iterable, List  # Optional, Union
+from typing import Any, Dict, Iterable, List, Optional  # Union
 
 from .utils import Logger, HTTPSemaphore
 from .urls import BASE_URL, META_URL
@@ -105,7 +105,7 @@ class Airtable(BaseAirtable):
         self._api_key = key or str(os.environ.get("AIRTABLE_API_KEY"))
         self.auth = {"Authorization": "Bearer {}".format(self.api_key)}
 
-    async def get_bases(self) -> List:  # noqa: F821
+    async def get_bases(self) -> Optional[List]:  # noqa: F821
         async with self.semaphore:
             url = "{}/bases".format(META_URL)
             res = await self._request("get", url)
@@ -124,24 +124,32 @@ class Airtable(BaseAirtable):
                 ]
                 self._bases_by_id = {base.id: base for base in self.bases}
                 self._bases_by_name = {base.name: base for base in self.bases}
+
+            else:
+                self.bases = None
         return self.bases
 
     async def get_base(self, value: str, key: str):
         assert key in (None, "id", "name")
         if not getattr(self, "bases", None):
             await self.get_bases()
-        if key == "name":
-            return self._bases_by_name.get(value)
+        if self.bases:
+            if key == "name":
+                return self._bases_by_name.get(value)
+            elif key == "id":
+                return self._bases_by_id.get(value)
+            else:
+                bases = [
+                    base
+                    for base in self.bases
+                    if base.name == value or base.id == value
+                ]
+                if bases:
+                    return bases[0]
         elif key == "id":
-            return self._bases_by_id.get(value)
-        else:
-            bases = [
-                base
-                for base in self.bases
-                if base.name == value or base.id == value
-            ]
-            if bases:
-                return bases[0]
+            return Base(
+                base_id=value, session=self._session, logging_level="info",
+            )
 
     async def get_enterprise_account(
         self, enterprise_account_id, logging_level="info"
@@ -149,7 +157,7 @@ class Airtable(BaseAirtable):
         url = "{}/enterpriseAccounts/{}".format(
             META_URL, enterprise_account_id
         )
-        res = await self._session.request("get", url, headers=self.auth)
+        res = await self._session.request("get", url)
         if Airtable._is_success(res):
             data = await Airtable._get_data(res)
             return Account(
@@ -158,6 +166,10 @@ class Airtable(BaseAirtable):
                 session=self._session,
                 logging_level=logging_level,
             )
+
+    async def get_table(self, base_id: str, table_name: str):
+        base = await self.get_base(value=base_id, key="id")
+        return Table(base, table_name)
 
 
 class Account(BaseAirtable):
@@ -257,6 +269,9 @@ class Base(BaseAirtable):
             ]
             if tables:
                 return tables[0]
+
+    async def create_table(self, table_name: str):
+        return Table(self, table_name)
 
 
 class Table(BaseAirtable):
