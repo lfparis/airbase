@@ -21,7 +21,7 @@ test:
 ## lint: Lint and format
 lint:
 	flake8 .
-	black --check .
+	black --line-length 79 --check .
 
 ## clean: delete python artifacts
 clean:
