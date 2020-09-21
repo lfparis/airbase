@@ -14,4 +14,3 @@ async def test_airtable() -> None:
         await at.get_bases()
         assert getattr(at, "bases", None)
         assert isinstance(at.bases[0], Base)
-
