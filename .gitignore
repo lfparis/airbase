@@ -1,3 +1,8 @@
+build/
+dist/
+docs/build
+
+
 .DS_store
 .eggs
 .tox
@@ -6,14 +11,16 @@
 *.pyc
 .pytest_cache
 .mypy_cache\
-.env
 .cache
-*.todo
-mypy.ini
+coverage.xml
+.coverage
 
 .env
 .vscode
 .venv
 
-dist/
-MANIFEST
+
+
+
+
+test.py

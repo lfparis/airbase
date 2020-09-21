@@ -1,10 +1,10 @@
-# Colors
-NC=\x1b[0m
-L_GREEN=\x1b[32;01m
+# Colours
+NC=\033[0m\n
+HIGHLIGHT=\033[91m
 
 ## usage: print useful commands
 usage:
-	@echo "$(L_GREEN)Choose a command: $(PWD) $(NC)"
+	@echo "$(HIGHLIGHT)Choose a command: $(PWD) $(NC)"
 	@bash -c "sed -ne 's/^##//p' ./Makefile | column -t -s ':' |  sed -e 's/^/ /'"
 
 ## release: Release new version
