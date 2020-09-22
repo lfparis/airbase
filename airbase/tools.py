@@ -258,16 +258,16 @@ async def combine_records(record_a, record_b, join_fields=None):
 
 async def filter_record(record_a, record_b, filter_fields=None):
     """
-    Filters a record for unique information.
+        Filters a record for unique information.
 
-    Args:
-        record_a (``dictionary``): New airtable record.
-        record_b (``dictionary``): Old airtable record (This will be dictate the ``id``)
-    Kwargs:
-        filter_fields (``list``, optional): list of fields(``string``) to filter.
-    Returns:
-        record (``dictionary``): If succesful, the filtered ``record``, else ``record_a``.
-    """  # noqa
+        Args:
+            record_a (``dictionary``): New airtable record.
+            record_b (``dictionary``): Old airtable record (This will be dictate the ``id``)
+        Kwargs:
+            filter_fields (``list``, optional): list of fields(``string``) to filter.
+        Returns:
+            record (``dictionary``): If succesful, the filtered ``record``, else ``record_a``.
+        """  # noqa
     try:
         record = {"id": record_b["id"], "fields": {}}
         if filter_fields:
@@ -280,8 +280,37 @@ async def filter_record(record_a, record_b, filter_fields=None):
 
     for key in keys:
         try:
-            if record_a["fields"][key] != record_b["fields"][key]:
+            if isinstance(record_a["fields"][key], list):
+                if (
+                    isinstance(record_a["fields"][key][0], dict)
+                    and "url" in record_a["fields"][key][0]
+                ):
+                    record_a_items = set(
+                        [
+                            item["url"].split("/")[-1]
+                            for item in record_a["fields"][key]
+                        ]
+                    )
+                    record_b_items = set(
+                        [
+                            item["url"].split("/")[-1]
+                            for item in record_b["fields"][key]
+                        ]
+                    )
+                else:
+                    record_a_items = set(
+                        item for item in record_a["fields"][key]
+                    )
+                    record_b_items = set(
+                        item for item in record_b["fields"][key]
+                    )
+                diff = record_a_items - record_b_items
+                if len(diff) != 0:
+                    record["fields"][key] = record_a["fields"][key]
+
+            elif record_a["fields"][key] != record_b["fields"][key]:
                 record["fields"][key] = record_a["fields"][key]
+
         except KeyError:
             if record_a["fields"][key]:
                 record["fields"][key] = record_a["fields"][key]
