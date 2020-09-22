@@ -230,7 +230,7 @@ class Base(BaseAirtable):
 
         self.log = logging_level
 
-    async def get_tables(self) -> List:  # noqa: F821
+    async def get_tables(self) -> Optional[List]:  # noqa: F821
         async with self.semaphore:
             url = "{}/tables".format(self.url)
             res = await self._request("get", url)
@@ -251,27 +251,29 @@ class Base(BaseAirtable):
                 self._tables_by_name = {
                     table.name: table for table in self.tables
                 }
+            else:
+                self.tables = None
         return self.tables
 
     async def get_table(self, value: str, key: str):
         assert key in (None, "id", "name")
         if not getattr(self, "tables", None):
             await self.get_tables()
-        if key == "name":
-            return self._tables_by_name.get(value)
-        elif key == "id":
-            return self._tables_by_id.get(value)
-        else:
-            tables = [
-                table
-                for table in self.tables
-                if table.name == value or table.id == value
-            ]
-            if tables:
-                return tables[0]
-
-    async def create_table(self, table_name: str):
-        return Table(self, table_name)
+        if self.tables:
+            if key == "name":
+                return self._tables_by_name.get(value)
+            elif key == "id":
+                return self._tables_by_id.get(value)
+            else:
+                tables = [
+                    table
+                    for table in self.tables
+                    if table.name == value or table.id == value
+                ]
+                if tables:
+                    return tables[0]
+        elif key == "name":
+            return Table(self, value)
 
 
 class Table(BaseAirtable):
