@@ -99,7 +99,7 @@ async def main() -> None:
             "id": "record id",
             "fields": {"field1": "value1", "field2": "value2"},
         }
-        await table.update_record()
+        await table.update_record(record)
         # Update several records in that table
         records = [
             {
@@ -115,20 +115,20 @@ async def main() -> None:
                 "fields": {"field1": "value1", "field2": "value2"},
             },
         ]
-        await table.update_records()
+        await table.update_records(records)
 
         # Delete a record in that table
         record = {
             "id": "record id",
         }
-        await table.delete_record()
+        await table.delete_record(record)
         # Delete several records in that table
         records = [
             {"id": "record id"},
             {"id": "record id"},
             {"id": "record id"},
         ]
-        await table.delete_records()
+        await table.delete_records(records)
 
 
 if __name__ == "__main__":
