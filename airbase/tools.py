@@ -311,7 +311,7 @@ async def filter_record(record_a, record_b, filter_fields=None):
             elif record_a["fields"][key] != record_b["fields"][key]:
                 record["fields"][key] = record_a["fields"][key]
 
-        except KeyError:
+        except (KeyError, IndexError):
             if record_a["fields"][key]:
                 record["fields"][key] = record_a["fields"][key]
     return record
