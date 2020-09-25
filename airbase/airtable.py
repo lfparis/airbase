@@ -129,7 +129,7 @@ class Airtable(BaseAirtable):
                 self.bases = None
         return self.bases
 
-    async def get_base(self, value: str, key: str):
+    async def get_base(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
         if not getattr(self, "bases", None):
             await self.get_bases()
@@ -255,7 +255,7 @@ class Base(BaseAirtable):
                 self.tables = None
         return self.tables
 
-    async def get_table(self, value: str, key: str):
+    async def get_table(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
         if not getattr(self, "tables", None):
             await self.get_tables()

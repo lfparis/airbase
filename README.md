@@ -29,6 +29,7 @@ table_key = "name or id of a table in that base"
 
 async def main() -> None:
     async with Airtable(api_key=api_key) as at:
+        at: Airtable
 
         # Get all bases for a user
         await at.get_bases()
