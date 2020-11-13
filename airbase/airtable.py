@@ -131,8 +131,15 @@ class Airtable(BaseAirtable):
 
     async def get_base(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
+
+        if key == "id":
+            return Base(
+                base_id=value, session=self._session, logging_level="info",
+            )
+
         if not getattr(self, "bases", None):
             await self.get_bases()
+
         if self.bases:
             if key == "name":
                 return self._bases_by_name.get(value)
@@ -146,10 +153,6 @@ class Airtable(BaseAirtable):
                 ]
                 if bases:
                     return bases[0]
-        elif key == "id":
-            return Base(
-                base_id=value, session=self._session, logging_level="info",
-            )
 
     async def get_enterprise_account(
         self, enterprise_account_id, logging_level="info"
@@ -257,8 +260,13 @@ class Base(BaseAirtable):
 
     async def get_table(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
+
+        if key == "name":
+            return Table(self, value)
+
         if not getattr(self, "tables", None):
             await self.get_tables()
+
         if self.tables:
             if key == "name":
                 return self._tables_by_name.get(value)
@@ -272,8 +280,6 @@ class Base(BaseAirtable):
                 ]
                 if tables:
                     return tables[0]
-        elif key == "name":
-            return Table(self, value)
 
 
 class Table(BaseAirtable):
