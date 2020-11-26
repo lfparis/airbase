@@ -26,7 +26,7 @@ class BaseAirtable:
     retries = 5
 
     def _is_success(self, res: Optional[ClientResponse]) -> bool:
-        if res is not None and res.status >= 200 and res.status < 300:
+        if res and res.status >= 200 and res.status < 300:
             return True
         else:
             return False
@@ -54,7 +54,8 @@ class BaseAirtable:
         count = 1
         step = 5
         while err or res.status in (408, 429, 503, 504):
-            await asyncio.sleep(0.1 * count ** 2)
+            delay = (count ** 2) * 0.1
+            await asyncio.sleep(delay)
 
             try:
                 res = await self._session.request(*args, **kwargs)
@@ -133,6 +134,10 @@ class Airtable(BaseAirtable):
     async def get_base(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
         if not getattr(self, "bases", None):
+            if key == "id":
+                return Base(
+                    base_id=value, session=self._session, logging_level="info",
+                )
             await self.get_bases()
         if self.bases:
             if key == "name":
@@ -147,10 +152,6 @@ class Airtable(BaseAirtable):
                 ]
                 if bases:
                     return bases[0]
-        elif key == "id":
-            return Base(
-                base_id=value, session=self._session, logging_level="info",
-            )
 
     async def get_enterprise_account(
         self, enterprise_account_id, logging_level="info"
@@ -259,6 +260,8 @@ class Base(BaseAirtable):
     async def get_table(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
         if not getattr(self, "tables", None):
+            if key == "name":
+                return Table(self, value)
             await self.get_tables()
         if self.tables:
             if key == "name":
@@ -273,8 +276,6 @@ class Base(BaseAirtable):
                 ]
                 if tables:
                     return tables[0]
-        elif key == "name":
-            return Table(self, value)
 
 
 class Table(BaseAirtable):
