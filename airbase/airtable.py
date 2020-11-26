@@ -25,8 +25,8 @@ logger = Logger.start(__name__)
 class BaseAirtable:
     retries = 5
 
-    def _is_success(self, res: ClientResponse) -> bool:
-        if res.status >= 200 and res.status < 300:
+    def _is_success(self, res: Optional[ClientResponse]) -> bool:
+        if res is not None and res.status >= 200 and res.status < 300:
             return True
         else:
             return False
@@ -67,7 +67,8 @@ class BaseAirtable:
                 err = True
 
             if count >= self.retries * step:
-                break
+                # res may not be defined at this point
+                return None
             count += step
         if res.status in (408, 429, 503, 504):
             # res.raise_for_status()

@@ -8,7 +8,12 @@ setup(
     author_email="lfparis@gmail.com",
     url="https://github.com/lfparis/airbase",
     version="0.0.1b5",
-    install_requires=["aiohttp", "pandas"],
+    install_requires=["aiohttp"],
+    extras_require={
+        "tools": ["pandas"],
+    },
+    package_data={"airbase": ["py.typed"]},
+    zip_safe=False,
     python_requires=">=3.7",
     keywords=["airtable", "api", "async", "async.io"],
     license="The MIT License (MIT)",
