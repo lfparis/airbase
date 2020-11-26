@@ -9,6 +9,8 @@ setup(
     url="https://github.com/lfparis/airbase",
     version="0.0.1b5",
     install_requires=["aiohttp", "pandas"],
+    package_data={"airbase": ["py.typed"]},
+    zip_safe=False,
     python_requires="!=2.7.*, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*",  # noqa: E501
     keywords=["airtable", "api", "async", "async.io"],
     license="The MIT License (MIT)",
