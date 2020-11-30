@@ -3,3 +3,6 @@ Todos:
         self.get_records():
             [] filter_by_fields convert array to urlencoded string
     Logger, level, etc
+
+    Airtable():
+        self.semaphore should be per pase

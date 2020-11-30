@@ -41,22 +41,8 @@ class BaseAirtable:
             return await res.read()  # bytes
 
     async def _request(self, *args, **kwargs):
-        try:
-            res = await self._session.request(*args, **kwargs)
-            err = False
-        except (
-            ClientConnectionError,
-            ClientConnectorError,
-            asyncio.TimeoutError,
-        ):
-            err = True
-
-        count = 1
-        step = 5
-        while err or res.status in (408, 429, 503, 504):
-            delay = (count ** 2) * 0.1
-            await asyncio.sleep(delay)
-
+        count = 0
+        while True:
             try:
                 res = await self._session.request(*args, **kwargs)
                 err = False
@@ -67,14 +53,17 @@ class BaseAirtable:
             ):
                 err = True
 
-            if count >= self.retries * step:
-                # res may not be defined at this point
-                return None
-            count += step
-        if res.status in (408, 429, 503, 504):
-            # res.raise_for_status()
-            pass
-        return res
+            if err or res.status in (408, 429, 503, 504):
+                delay = (2 ** count) * 0.51
+                count += 1
+                if count > self.retries:
+                    # res may not be defined at this point
+                    # res.raise_for_status()
+                    return None
+                else:
+                    await asyncio.sleep(delay)
+            else:
+                return res
 
 
 class Airtable(BaseAirtable):
