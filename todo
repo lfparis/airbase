@@ -5,4 +5,5 @@ Todos:
     Logger, level, etc
 
     Airtable():
-        self.semaphore should be per pase
+        self.semaphore should be restricted to calls to META_URL,
+        and each base should have it's own semaphore.
