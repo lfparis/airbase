@@ -8,6 +8,7 @@ from aiohttp import (
     ClientConnectionError,
     ClientConnectorError,
     ClientSession,
+    ClientTimeout,
     ContentTypeError,
     TCPConnector,
     ClientResponse,
@@ -67,7 +68,7 @@ class BaseAirtable:
 
 
 class Airtable(BaseAirtable):
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, timeout: int = 300):
         """
         Airtable class for multiple bases
 
@@ -75,11 +76,15 @@ class Airtable(BaseAirtable):
             api_key (``string``): Airtable API Key.
         """
         self.api_key = api_key
+        self.timeout = timeout
         self.semaphore = HTTPSemaphore(value=50, interval=1, max_calls=5)
 
     async def __aenter__(self):
         conn = TCPConnector(limit=100)
-        self._session = ClientSession(connector=conn, headers=self.auth)
+        timeout = ClientTimeout(total=self.timeout)
+        self._session = ClientSession(
+            connector=conn, headers=self.auth, timeout=timeout
+        )
         return self
 
     async def __aexit__(self, *err):
