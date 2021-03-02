@@ -343,7 +343,9 @@ class Table(BaseAirtable):
         """
         return f"{BASE_URL}/{self.base.id}/{urllib.parse.quote(self.name)}"
 
-    async def _multiple(self, func, records: list) -> bool:
+    async def _multiple(
+        self, func, records: list, typecast: bool = False
+    ) -> bool:
         """
         Posts/Patches/Deletes records to a table in batches of 10.
 
@@ -359,7 +361,7 @@ class Table(BaseAirtable):
 
         tasks = []
         for sub_list in records_iter:
-            tasks.append(asyncio.create_task(func(sub_list)))
+            tasks.append(asyncio.create_task(func(sub_list, typecast)))
         results = await asyncio.gather(*tasks)
         if any(not r for r in results):
             return False
@@ -442,7 +444,7 @@ class Table(BaseAirtable):
             self.records = []
         return self.records
 
-    async def post_record(self, record: dict) -> bool:
+    async def post_record(self, record: dict, typecast: bool = False) -> bool:
         """
         Adds a record to a table.
 
@@ -454,6 +456,8 @@ class Table(BaseAirtable):
         message = self._basic_log_msg(record)
         headers = {"Content-Type": "application/json"}
         data = {"fields": record["fields"]}
+        if typecast:
+            data["typecast"] = True
         async with self.base.semaphore:
             res = await self._request(
                 "post", self.url, json=data, headers=headers
@@ -468,13 +472,17 @@ class Table(BaseAirtable):
             )
             return False
 
-    async def _post_records(self, records: list) -> bool:
+    async def _post_records(
+        self, records: list, typecast: bool = False
+    ) -> bool:
         headers = {"Content-Type": "application/json"}
         message = self._basic_log_msg(records)
 
         data = {
             "records": [{"fields": record["fields"]} for record in records]
         }
+        if typecast:
+            data["typecast"] = True
         async with self.base.semaphore:
             res = await self._session.request(
                 "post", self.url, json=data, headers=headers
@@ -489,7 +497,9 @@ class Table(BaseAirtable):
             )
             return False
 
-    async def post_records(self, records: list) -> None:
+    async def post_records(
+        self, records: list, typecast: bool = False
+    ) -> None:
         """
         Adds records to a table in batches of 10.
 
@@ -498,9 +508,11 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
-        return await self._multiple(self._post_records, records)
+        return await self._multiple(self._post_records, records, typecast)
 
-    async def update_record(self, record: dict) -> bool:
+    async def update_record(
+        self, record: dict, typecast: bool = False
+    ) -> bool:
         """
         Updates a record in a table.
 
@@ -517,6 +529,8 @@ class Table(BaseAirtable):
         url = self._add_record_to_url(record.get("id"))
         headers = {"Content-Type": "application/json"}
         data = {"fields": record.get("fields")}
+        if typecast:
+            data["typecast"] = True
         async with self.base.semaphore:
             res = await self._request("patch", url, json=data, headers=headers)
         if self._is_success(res):
@@ -529,7 +543,9 @@ class Table(BaseAirtable):
             )
             return False
 
-    async def _update_records(self, records: list) -> bool:
+    async def _update_records(
+        self, records: list, typecast: bool = False
+    ) -> bool:
         headers = {"Content-Type": "application/json"}
         message = self._basic_log_msg(records)
         data = {
@@ -538,6 +554,8 @@ class Table(BaseAirtable):
                 for record in records
             ]
         }
+        if typecast:
+            data["typecast"] = True
         async with self.base.semaphore:
             res = await self._request(
                 "patch", self.url, headers=headers, json=data
@@ -552,7 +570,9 @@ class Table(BaseAirtable):
             )
             return False
 
-    async def update_records(self, records: list) -> bool:
+    async def update_records(
+        self, records: list, typecast: bool = False
+    ) -> bool:
         """
         Updates records in a table in batches of 10.
 
@@ -561,7 +581,7 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
-        return await self._multiple(self._update_records, records)
+        return await self._multiple(self._update_records, records, typecast)
 
     async def delete_record(self, record: dict) -> bool:
         """
