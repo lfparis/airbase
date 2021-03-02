@@ -17,5 +17,6 @@ coverage.xml
 .env
 .vscode
 .venv
+.python-version
 
 test.py
