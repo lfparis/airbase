@@ -167,7 +167,7 @@ async def graft_fields(record, fields, separator=",", sort=True):
         value = record["fields"].get(field)
         if value:
             if separator in value:
-                value_list = value.split(",")
+                value_list = value.split(separator)
                 if sort:
                     value_list = value_list.sort()
             else:
@@ -177,7 +177,10 @@ async def graft_fields(record, fields, separator=",", sort=True):
 
 
 async def link_tables(
-    table_a, table_b, fields_to_link_in_a, primary_key_b,
+    table_a,
+    table_b,
+    fields_to_link_in_a,
+    primary_key_b,
 ):
     """
     Links records from another table to a record based on filter criteria.
@@ -258,16 +261,16 @@ async def combine_records(record_a, record_b, join_fields=None):
 
 async def filter_record(record_a, record_b, filter_fields=None):
     """
-        Filters a record for unique information.
+    Filters a record for unique information.
 
-        Args:
-            record_a (``dictionary``): New airtable record.
-            record_b (``dictionary``): Old airtable record (This will be dictate the ``id``)
-        Kwargs:
-            filter_fields (``list``, optional): list of fields(``string``) to filter.
-        Returns:
-            record (``dictionary``): If succesful, the filtered ``record``, else ``record_a``.
-        """  # noqa
+    Args:
+        record_a (``dictionary``): New airtable record.
+        record_b (``dictionary``): Old airtable record (This will be dictate the ``id``)
+    Kwargs:
+        filter_fields (``list``, optional): list of fields(``string``) to filter.
+    Returns:
+        record (``dictionary``): If succesful, the filtered ``record``, else ``record_a``.
+    """  # noqa
     try:
         record = {"id": record_b["id"], "fields": {}}
         if filter_fields:
@@ -347,7 +350,7 @@ async def compare_records(
     Compares a record in a table.
 
     Args:
-        record_a (``dictionary``): record to compare 
+        record_a (``dictionary``): record to compare
         record_b (``dictionary``): record to compare against.
         method (``string``): Either "overwrite" or "combine"
     Kwargs:
