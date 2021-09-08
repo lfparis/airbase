@@ -18,6 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional  # Union
 
 from .utils import Logger, HTTPSemaphore
 from .urls import BASE_URL, META_URL
+from .validations import validate_records
 
 
 logger = Logger.start(__name__)
@@ -68,22 +69,33 @@ class BaseAirtable:
 
 
 class Airtable(BaseAirtable):
-    def __init__(self, api_key: str = None, timeout: int = 300):
+    def __init__(
+        self,
+        api_key: str = None,
+        timeout: int = 300,
+        raise_for_status: bool = False,
+    ):
         """
         Airtable class for multiple bases
 
         Kwargs:
             api_key (``string``): Airtable API Key.
-        """
+            timeout (``int``): a ClientTimeout settings structure. 300 seconds (5min) total timeout by default
+            raise_for_status (``string``): Raise an aiohttp.ClientResponseError if the response status is 400 or higher.
+        """  # noqa: E501
         self.api_key = api_key
         self.timeout = timeout
         self.semaphore = HTTPSemaphore(value=50, interval=1, max_calls=5)
+        self.raise_for_status = raise_for_status
 
     async def __aenter__(self):
         conn = TCPConnector(limit=100)
         timeout = ClientTimeout(total=self.timeout)
         self._session = ClientSession(
-            connector=conn, headers=self.auth, timeout=timeout
+            connector=conn,
+            headers=self.auth,
+            timeout=timeout,
+            raise_for_status=self.raise_for_status,
         )
         return self
 
@@ -99,11 +111,11 @@ class Airtable(BaseAirtable):
     @api_key.setter
     def api_key(self, key: str):
         self._api_key = key or str(os.environ.get("AIRTABLE_API_KEY"))
-        self.auth = {"Authorization": "Bearer {}".format(self.api_key)}
+        self.auth = {"Authorization": f"Bearer {self.api_key}"}
 
     async def get_bases(self) -> Optional[List]:  # noqa: F821
         async with self.semaphore:
-            url = "{}/bases".format(META_URL)
+            url = f"{META_URL}/bases"
             res = await self._request("get", url)
 
             if self._is_success(res):
@@ -130,7 +142,9 @@ class Airtable(BaseAirtable):
         if not getattr(self, "bases", None):
             if key == "id":
                 return Base(
-                    base_id=value, session=self._session, logging_level="info",
+                    base_id=value,
+                    session=self._session,
+                    logging_level="info",
                 )
             await self.get_bases()
         if self.bases:
@@ -150,9 +164,7 @@ class Airtable(BaseAirtable):
     async def get_enterprise_account(
         self, enterprise_account_id, logging_level="info"
     ):
-        url = "{}/enterpriseAccounts/{}".format(
-            META_URL, enterprise_account_id
-        )
+        url = f"{META_URL}/enterpriseAccounts/{enterprise_account_id}"
         res = await self._session.request("get", url)
         if Airtable._is_success(res):
             data = await Airtable._get_data(res)
@@ -187,7 +199,7 @@ class Account(BaseAirtable):
             logging_level (``string``, default="info"):
         """
         self.id = enterprise_account_id
-        self.url = "{}/enterpriseAccounts/{}".format(META_URL, self.id)
+        self.url = f"{META_URL}/enterpriseAccounts/{self.id}"
         self._session = session
         self.logging_level = logging_level
         if data:
@@ -219,7 +231,7 @@ class Base(BaseAirtable):
         self.id = base_id
         self.name = name
         self.permission_level = permission_level
-        self.url = "{}/bases/{}".format(META_URL, self.id)
+        self.url = f"{META_URL}/bases/{self.id}"
 
         self._session = session
         self.semaphore = HTTPSemaphore(value=50, interval=1, max_calls=5)
@@ -228,7 +240,7 @@ class Base(BaseAirtable):
 
     async def get_tables(self) -> Optional[List]:  # noqa: F821
         async with self.semaphore:
-            url = "{}/tables".format(self.url)
+            url = f"{self.url}/tables"
             res = await self._request("get", url)
             if self._is_success(res):
                 data = await self._get_data(res)
@@ -318,7 +330,7 @@ class Table(BaseAirtable):
                 plural = "s"
             else:
                 plural = ""
-            message = "{} record{}".format(len(content), plural)
+            message = f"{len(content)} record{plural}"
         else:
             message = "1 record"
         return message
@@ -342,6 +354,16 @@ class Table(BaseAirtable):
             url (``string``): Composed url.
         """
         return f"{BASE_URL}/{self.base.id}/{urllib.parse.quote(self.name)}"
+
+    def _get_record_primary_key_value_or_id(self, record: dict) -> str:
+        if (
+            record.get("fields")
+            and self.primary_field_name
+            and record["fields"].get(self.primary_field_name)
+        ):
+            return record["fields"][self.primary_field_name]
+        else:
+            return record.get("id")
 
     async def _multiple(
         self, func, records: list, typecast: bool = False
@@ -453,7 +475,9 @@ class Table(BaseAirtable):
         Kwargs:
             message (``string``, optional): Custom logger message.
         """
-        message = self._basic_log_msg(record)
+        await validate_records(record)
+        message = self._get_record_primary_key_value_or_id(record)
+
         headers = {"Content-Type": "application/json"}
         data = {"fields": record["fields"]}
         if typecast:
@@ -508,6 +532,7 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
+        await validate_records(records)
         return await self._multiple(self._post_records, records, typecast)
 
     async def update_record(
@@ -523,9 +548,9 @@ class Table(BaseAirtable):
         Returns:
             records (``list``): If succesful, a list of existing records (``dictionary``).
         """  # noqa
-        message = record["fields"].get(self.primary_field_name) or record.get(
-            "id"
-        )
+        await validate_records(record)
+
+        message = self._get_record_primary_key_value_or_id(record)
         url = self._add_record_to_url(record.get("id"))
         headers = {"Content-Type": "application/json"}
         data = {"fields": record.get("fields")}
@@ -581,6 +606,7 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
+        await validate_records(records)
         return await self._multiple(self._update_records, records, typecast)
 
     async def delete_record(self, record: dict) -> bool:
@@ -592,9 +618,9 @@ class Table(BaseAirtable):
         Kwargs:
             message (``string``, optional): Custom logger message.
         """
-        message = record["fields"].get(self.primary_field_name) or record.get(
-            "id"
-        )
+        await validate_records(record, fields=False)
+
+        message = self._get_record_primary_key_value_or_id(record)
         url = self._add_record_to_url(record["id"])
         async with self.base.semaphore:
             res = await self._session.request("delete", url)
@@ -647,4 +673,5 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
+        await validate_records(records, fields=False)
         return await self._multiple(self._delete_records, records)
