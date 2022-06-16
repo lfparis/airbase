@@ -34,7 +34,7 @@ VIEW_TYPES = ("grid", "form", "calendar", "gallery", "kanban")
 PERMISSION_LEVELS = ("read", "comment", "edit", "create")
 
 
-async def validate_records(
+def validate_records(
     records: Union[Iterable[dict], dict], record_id=True, fields=True
 ) -> None:
     """
@@ -45,7 +45,7 @@ async def validate_records(
     """
     if isinstance(records, list) and records:
         for r in records:
-            await validate_records(r)
+            validate_records(r)
 
     elif isinstance(records, dict):
         if record_id:

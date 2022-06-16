@@ -1,23 +1,19 @@
 from __future__ import absolute_import
 
-import asyncio
 import os
 import urllib
 
-from aiohttp import (
-    ClientConnectionError,
-    ClientConnectorError,
-    ClientSession,
-    ClientTimeout,
-    ContentTypeError,
-    TCPConnector,
-    ClientResponse,
-)
+from time import sleep
+from requests import codes
+from requests import Session, Response
+from requests.adapters import HTTPAdapter
+from requests.exceptions import ConnectionError, Timeout
+
 from json.decoder import JSONDecodeError
 from typing import Any, Dict, Iterable, List, Optional  # Union
 
 from .exceptions import AirbaseException
-from .utils import Logger, HTTPSemaphore
+from .utils import Logger
 from .urls import BASE_URL, META_URL
 from .validations import validate_records
 
@@ -44,35 +40,31 @@ class BaseAirtable:
         self.raise_for_status = raise_for_status
         self.verbose = verbose
 
-    def _is_success(self, res: Optional[ClientResponse]) -> bool:
-        if res and res.status >= 200 and res.status < 300:
+    def _is_success(self, res: Optional[Response]) -> bool:
+        if res and res.status_code >= 200 and res.status_code < 300:
             return True
         else:
             return False
 
-    async def _get_data(self, res: ClientResponse):
+    def _get_data(self, res: Response):
         try:
-            return await res.json(encoding="utf-8")  # dict
+            return res.json(encoding="utf-8")  # dict
         # else if raw data
         except JSONDecodeError:
-            return await res.text(encoding="utf-8")  # string
-        except ContentTypeError:
-            return await res.read()  # bytes
+            return res.content(encoding="utf-8")  # string
+        # except ContentTypeError:
+        #     return res.read()  # bytes
 
-    async def _request(self, *args, **kwargs):
+    def _request(self, *args, **kwargs):
         count = 0
         while True:
             try:
-                res = await self._session.request(*args, **kwargs)
+                res: Response = self._session.request(*args, **kwargs)
                 err = False
-            except (
-                ClientConnectionError,
-                ClientConnectorError,
-                asyncio.TimeoutError,
-            ):
+            except (ConnectionError, Timeout):
                 err = True
 
-            if err or res.status in (408, 429, 503, 504):
+            if err or res.status_code in (408, 429, 503, 504):
                 delay = (2 ** count) * 0.51
                 count += 1
                 if count > self.retries:
@@ -80,7 +72,7 @@ class BaseAirtable:
                     # res.raise_for_status()
                     return None
                 else:
-                    await asyncio.sleep(delay)
+                    sleep(delay)
             else:
                 return res
 
@@ -105,21 +97,17 @@ class Airtable(BaseAirtable):
         super().__init__(**kwargs)
         self.api_key = api_key
         self.timeout = timeout
-        self.semaphore = HTTPSemaphore(value=50, interval=1, max_calls=5)
 
-    async def __aenter__(self):
-        conn = TCPConnector(limit=100)
-        timeout = ClientTimeout(total=self.timeout)
-        self._session = ClientSession(
-            connector=conn,
-            headers=self.auth,
-            timeout=timeout,
-            # raise_for_status=self.raise_for_status,
-        )
+    def __enter__(self):
+        self._session = Session()
+        self._session.headers = self.auth
+        adapter = HTTPAdapter(max_retries=BaseAirtable.retries)
+        self._session.mount(BASE_URL, adapter)
+        self.success_codes = (codes.ok, codes.created, codes.accepted)
         return self
 
-    async def __aexit__(self, *err):
-        await self._session.close()
+    def __exit__(self, *err):
+        self._session.close()
         self._session = None
 
     @property
@@ -132,36 +120,35 @@ class Airtable(BaseAirtable):
         self._api_key = key or str(os.environ.get("AIRTABLE_API_KEY"))
         self.auth = {"Authorization": f"Bearer {self.api_key}"}
 
-    async def get_bases(self) -> Optional[List]:  # noqa: F821
-        async with self.semaphore:
-            url = f"{META_URL}/bases"
-            res = await self._request("get", url)
+    def get_bases(self) -> Optional[List]:  # noqa: F821
+        url = f"{META_URL}/bases"
+        res = self._request("get", url)
 
-            data = await self._get_data(res)
-            if self._is_success(res):
-                # data = await self._get_data(res)
-                self.bases = [
-                    Base(
-                        base["id"],
-                        name=base["name"],
-                        permission_level=base["permissionLevel"],
-                        session=self._session,
-                        logging_level="info",
-                        raise_for_status=self.raise_for_status,
-                        verbose=self.verbose,
-                    )
-                    for base in data["bases"]
-                ]
-                self._bases_by_id = {base.id: base for base in self.bases}
-                self._bases_by_name = {base.name: base for base in self.bases}
+        data = self._get_data(res)
+        if self._is_success(res):
+            # data = self._get_data(res)
+            self.bases = [
+                Base(
+                    base["id"],
+                    name=base["name"],
+                    permission_level=base["permissionLevel"],
+                    session=self._session,
+                    logging_level="info",
+                    raise_for_status=self.raise_for_status,
+                    verbose=self.verbose,
+                )
+                for base in data["bases"]
+            ]
+            self._bases_by_id = {base.id: base for base in self.bases}
+            self._bases_by_name = {base.name: base for base in self.bases}
 
-            else:
-                error_msg = f"{res.status}: Failed to get bases -> '{data.get('error').get('type')}'"  # noqa:E501
-                self.raise_or_log_error(error_msg)
-                self.bases = None
+        else:
+            error_msg = f"{res.status_code}: Failed to get bases -> '{data.get('error').get('type')}'"  # noqa:E501
+            self.raise_or_log_error(error_msg)
+            self.bases = None
         return self.bases
 
-    async def get_base(self, value: str, key: Optional[str] = None):
+    def get_base(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
         if not getattr(self, "bases", None):
             if key == "id":
@@ -172,7 +159,7 @@ class Airtable(BaseAirtable):
                     raise_for_status=self.raise_for_status,
                     verbose=self.verbose,
                 )
-            await self.get_bases()
+            self.get_bases()
         if self.bases:
             if key == "name":
                 return self._bases_by_name.get(value)
@@ -190,13 +177,13 @@ class Airtable(BaseAirtable):
             error_msg = "Failed to get base."  # noqa:E501
             self.raise_or_log_error(error_msg)
 
-    async def get_enterprise_account(
+    def get_enterprise_account(
         self, enterprise_account_id, logging_level="info"
     ):
         url = f"{META_URL}/enterpriseAccounts/{enterprise_account_id}"
-        res = await self._session.request("get", url)
+        res = self._session.request("get", url)
         if Airtable._is_success(res):
-            data = await Airtable._get_data(res)
+            data = Airtable._get_data(res)
             return Account(
                 data["id"],
                 data,
@@ -204,8 +191,8 @@ class Airtable(BaseAirtable):
                 logging_level=logging_level,
             )
 
-    async def get_table(self, base_id: str, table_name: str):
-        base = await self.get_base(value=base_id, key="id")
+    def get_table(self, base_id: str, table_name: str):
+        base = self.get_base(value=base_id, key="id")
         return Table(
             base,
             table_name,
@@ -268,42 +255,36 @@ class Base(BaseAirtable):
         self.name = name
         self.permission_level = permission_level
         self.url = f"{META_URL}/bases/{self.id}"
-
         self._session = session
-        self.semaphore = HTTPSemaphore(value=50, interval=1, max_calls=5)
-
         self.log = logging_level
 
-    async def get_tables(self) -> Optional[List]:  # noqa: F821
-        async with self.semaphore:
-            url = f"{self.url}/tables"
-            res = await self._request("get", url)
-            data = await self._get_data(res)
-            if self._is_success(res):
-                self.tables = [
-                    Table(
-                        self,
-                        table["name"],
-                        table_id=table["id"],
-                        primary_field_id=table["primaryFieldId"],
-                        fields=table["fields"],
-                        views=table["views"],
-                        raise_for_status=self.raise_for_status,
-                        verbose=self.verbose,
-                    )
-                    for table in data["tables"]
-                ]
-                self._tables_by_id = {table.id: table for table in self.tables}
-                self._tables_by_name = {
-                    table.name: table for table in self.tables
-                }
-            else:
-                error_msg = f"{res.status}: Failed to get tables -> '{data.get('error').get('type')}'"  # noqa:E501
-                self.raise_or_log_error(error_msg)
-                self.tables = None
+    def get_tables(self) -> Optional[List]:  # noqa: F821
+        url = f"{self.url}/tables"
+        res = self._request("get", url)
+        data = self._get_data(res)
+        if self._is_success(res):
+            self.tables = [
+                Table(
+                    self,
+                    table["name"],
+                    table_id=table["id"],
+                    primary_field_id=table["primaryFieldId"],
+                    fields=table["fields"],
+                    views=table["views"],
+                    raise_for_status=self.raise_for_status,
+                    verbose=self.verbose,
+                )
+                for table in data["tables"]
+            ]
+            self._tables_by_id = {table.id: table for table in self.tables}
+            self._tables_by_name = {table.name: table for table in self.tables}
+        else:
+            error_msg = f"{res.status_code}: Failed to get tables -> '{data.get('error').get('type')}'"  # noqa:E501
+            self.raise_or_log_error(error_msg)
+            self.tables = None
         return self.tables
 
-    async def get_table(self, value: str, key: Optional[str] = None):
+    def get_table(self, value: str, key: Optional[str] = None):
         assert key in (None, "id", "name")
         if not getattr(self, "tables", None):
             if key == "name":
@@ -313,7 +294,7 @@ class Base(BaseAirtable):
                     raise_for_status=self.raise_for_status,
                     verbose=self.verbose,
                 )
-            await self.get_tables()
+            self.get_tables()
         if self.tables:
             if key == "name":
                 return self._tables_by_name.get(value)
@@ -415,9 +396,7 @@ class Table(BaseAirtable):
         else:
             return record.get("id")
 
-    async def _multiple(
-        self, func, records: list, typecast: bool = False
-    ) -> bool:
+    def _multiple(self, func, records: list, typecast: bool = False) -> bool:
         """
         Posts/Patches/Deletes records to a table in batches of 10.
 
@@ -431,16 +410,15 @@ class Table(BaseAirtable):
             records[i : i + 10] for i in range(0, len(records), 10)
         )
 
-        tasks = []
+        results = []
         for sub_list in records_iter:
-            tasks.append(asyncio.create_task(func(sub_list, typecast)))
-        results = await asyncio.gather(*tasks)
+            results.append(func(sub_list, typecast))
         if any(not r for r in results):
             return False
         else:
             return True
 
-    async def get_record(self, record_id: str) -> dict:
+    def get_record(self, record_id: str) -> dict:
         """
         Gets one record from a table.
 
@@ -450,19 +428,18 @@ class Table(BaseAirtable):
             records (``list``): If succesful, a list of existing records (``dictionary``).
         """  # noqa: E501
         url = self._add_record_to_url(record_id)
-        async with self.base.semaphore:
-            res = await self._request("get", url)
-        data = await self._get_data(res)
+        res = self._request("get", url)
+        data = self._get_data(res)
         if self._is_success(res):
             val = data["fields"].get(self.primary_field_name) or record_id
             logger.info(f"Fetched record: <{val}> from table: {self.name}")
             return data
         else:
-            error_msg = f"{res.status}: Failed to get record: <{record_id}> from table: {self.name} -> {data.get('error')}"  # noqa: E501
+            error_msg = f"{res.status_code}: Failed to get record: <{record_id}> from table: {self.name} -> {data.get('error')}"  # noqa: E501
             self.raise_or_log_error(error_msg)
             return {}
 
-    async def get_records(
+    def get_records(
         self,
         view: str = None,
         filter_by_fields: list = None,
@@ -490,13 +467,12 @@ class Table(BaseAirtable):
 
         records = []
         while True:
-            async with self.base.semaphore:
-                res = await self._request("get", self.url, params=params)
+            res = self._request("get", self.url, params=params)
             if not self._is_success(res):
                 error_msg = f"Records for Table: {self.name} could not be retreived."  # noqa: E501
                 self.raise_or_log_error(error_msg)
                 break
-            data = await self._get_data(res)
+            data = self._get_data(res)
             try:
                 records.extend(data["records"])
             except (AttributeError, KeyError, TypeError):
@@ -516,7 +492,7 @@ class Table(BaseAirtable):
             self.records = []
         return self.records
 
-    async def post_record(self, record: dict, typecast: bool = False) -> bool:
+    def post_record(self, record: dict, typecast: bool = False) -> bool:
         """
         Adds a record to a table.
 
@@ -525,7 +501,7 @@ class Table(BaseAirtable):
         Kwargs:
             message (``string``, optional): Custom logger message.
         """
-        await validate_records(record, record_id=False)
+        validate_records(record, record_id=False)
         message = self._get_record_primary_key_value_or_id(
             record
         ) or self._basic_log_msg(record)
@@ -534,22 +510,17 @@ class Table(BaseAirtable):
         data = {"fields": record["fields"]}
         if typecast:
             data["typecast"] = True
-        async with self.base.semaphore:
-            res = await self._request(
-                "post", self.url, json=data, headers=headers
-            )
+        res = self._request("post", self.url, json=data, headers=headers)
         if self._is_success(res):
             logger.info(f"Posted: {message}")
             return True
         else:
-            data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to post: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            data = self._get_data(res)
+            error_msg = f"{res.status_code}: Failed to post: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
             return False
 
-    async def _post_records(
-        self, records: list, typecast: bool = False
-    ) -> bool:
+    def _post_records(self, records: list, typecast: bool = False) -> bool:
         headers = {"Content-Type": "application/json"}
         message = self._basic_log_msg(records)
 
@@ -558,22 +529,19 @@ class Table(BaseAirtable):
         }
         if typecast:
             data["typecast"] = True
-        async with self.base.semaphore:
-            res = await self._session.request(
-                "post", self.url, json=data, headers=headers
-            )
+        res = self._session.request(
+            "post", self.url, json=data, headers=headers
+        )
         if self._is_success(res):
             logger.info(f"Posted: {message}")
             return True
         else:
-            data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to post: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            data = self._get_data(res)
+            error_msg = f"{res.status_code}: Failed to post: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
             return False
 
-    async def post_records(
-        self, records: list, typecast: bool = False
-    ) -> None:
+    def post_records(self, records: list, typecast: bool = False) -> None:
         """
         Adds records to a table in batches of 10.
 
@@ -582,12 +550,10 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
-        await validate_records(records, record_id=False)
-        return await self._multiple(self._post_records, records, typecast)
+        validate_records(records, record_id=False)
+        return self._multiple(self._post_records, records, typecast)
 
-    async def update_record(
-        self, record: dict, typecast: bool = False
-    ) -> bool:
+    def update_record(self, record: dict, typecast: bool = False) -> bool:
         """
         Updates a record in a table.
 
@@ -598,7 +564,7 @@ class Table(BaseAirtable):
         Returns:
             records (``list``): If succesful, a list of existing records (``dictionary``).
         """  # noqa
-        await validate_records(record)
+        validate_records(record)
 
         message = self._get_record_primary_key_value_or_id(
             record
@@ -608,20 +574,17 @@ class Table(BaseAirtable):
         data = {"fields": record.get("fields")}
         if typecast:
             data["typecast"] = True
-        async with self.base.semaphore:
-            res = await self._request("patch", url, json=data, headers=headers)
+        res = self._request("patch", url, json=data, headers=headers)
         if self._is_success(res):
             logger.info(f"Updated: {message}")
             return True
         else:
-            data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to update: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            data = self._get_data(res)
+            error_msg = f"{res.status_code}: Failed to update: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
             return False
 
-    async def _update_records(
-        self, records: list, typecast: bool = False
-    ) -> bool:
+    def _update_records(self, records: list, typecast: bool = False) -> bool:
         headers = {"Content-Type": "application/json"}
         message = self._basic_log_msg(records)
         data = {
@@ -632,22 +595,17 @@ class Table(BaseAirtable):
         }
         if typecast:
             data["typecast"] = True
-        async with self.base.semaphore:
-            res = await self._request(
-                "patch", self.url, headers=headers, json=data
-            )
+        res = self._request("patch", self.url, headers=headers, json=data)
         if self._is_success(res):
             logger.info(f"Updated: {message}")
             return True
         else:
-            data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to update: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            data = self._get_data(res)
+            error_msg = f"{res.status_code}: Failed to update: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
             return False
 
-    async def update_records(
-        self, records: list, typecast: bool = False
-    ) -> bool:
+    def update_records(self, records: list, typecast: bool = False) -> bool:
         """
         Updates records in a table in batches of 10.
 
@@ -656,10 +614,10 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
-        await validate_records(records)
-        return await self._multiple(self._update_records, records, typecast)
+        validate_records(records)
+        return self._multiple(self._update_records, records, typecast)
 
-    async def delete_record(self, record: dict) -> bool:
+    def delete_record(self, record: dict) -> bool:
         """
         Deletes a record from a table.
 
@@ -668,22 +626,21 @@ class Table(BaseAirtable):
         Kwargs:
             message (``string``, optional): Custom logger message.
         """
-        await validate_records(record, fields=False)
+        validate_records(record, fields=False)
 
         message = self._get_record_primary_key_value_or_id(record)
         url = self._add_record_to_url(record["id"])
-        async with self.base.semaphore:
-            res = await self._session.request("delete", url)
+        res = self._session.request("delete", url)
         if self._is_success(res):
             logger.info(f"Deleted: {message}")
             return True
         else:
-            data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to delete: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            data = self._get_data(res)
+            error_msg = f"{res.status_code}: Failed to delete: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
             return False
 
-    async def _delete_records(self, records: list, *args, **kwargs) -> bool:
+    def _delete_records(self, records: list, *args, **kwargs) -> bool:
         """
         Deletes records from a table in batches of 10.
 
@@ -698,20 +655,17 @@ class Table(BaseAirtable):
 
         params = [("records[]", record.get("id")) for record in records]
 
-        async with self.base.semaphore:
-            res = await self._request(
-                "delete", self.url, params=params, headers=headers
-            )
+        res = self._request("delete", self.url, params=params, headers=headers)
         if self._is_success(res):
             logger.info(f"Deleted: {message}")
             return True
         else:
-            data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to delete: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            data = self._get_data(res)
+            error_msg = f"{res.status_code}: Failed to delete: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
             return False
 
-    async def delete_records(self, records: list) -> bool:
+    def delete_records(self, records: list) -> bool:
         """
         Deletes records in a table in batches of 10.
 
@@ -720,5 +674,5 @@ class Table(BaseAirtable):
         Returns:
             True if succesful
         """  # noqa: E501
-        await validate_records(records, fields=False)
-        return await self._multiple(self._delete_records, records)
+        validate_records(records, fields=False)
+        return self._multiple(self._delete_records, records)

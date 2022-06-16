@@ -10,7 +10,7 @@ from .utils import Logger
 logger = Logger.start(__name__)
 
 
-async def compare(
+def compare(
     df_1: pd.DataFrame, df_2: pd.DataFrame, primary_keys: List[str]
 ) -> pd.DataFrame:
     """
@@ -136,7 +136,7 @@ async def compare(
     return create_df.append(update_df, sort=True).append(delete_df, sort=True)
 
 
-async def is_record(value):
+def is_record(value):
     """
     Checks whether a value is a Record ID or a list of Record IDs
 
@@ -150,7 +150,7 @@ async def is_record(value):
     return isinstance(value, str) and value[0:3] == "rec" and len(value) == 17
 
 
-async def get_primary_keys_as_hashable(record, primary_keys):
+def get_primary_keys_as_hashable(record, primary_keys):
     hashable_keys = []
     for key in primary_keys:
         val = record["fields"].get(key)
@@ -161,7 +161,7 @@ async def get_primary_keys_as_hashable(record, primary_keys):
     return tuple(hashable_keys) if hashable_keys else None
 
 
-async def graft_fields(record, fields, separator=",", sort=True):
+def graft_fields(record, fields, separator=",", sort=True):
 
     for field in fields:
         value = record["fields"].get(field)
@@ -176,7 +176,7 @@ async def graft_fields(record, fields, separator=",", sort=True):
     return record
 
 
-async def link_tables(
+def link_tables(
     table_a,
     table_b,
     fields_to_link_in_a,
@@ -219,7 +219,7 @@ async def link_tables(
     return table_a
 
 
-async def combine_records(record_a, record_b, join_fields=None):
+def combine_records(record_a, record_b, join_fields=None):
     """
     Combines unique information from two records into 1.
 
@@ -259,7 +259,7 @@ async def combine_records(record_a, record_b, join_fields=None):
         return record_a
 
 
-async def filter_record(record_a, record_b, filter_fields=None):
+def filter_record(record_a, record_b, filter_fields=None):
     """
     Filters a record for unique information.
 
@@ -320,7 +320,7 @@ async def filter_record(record_a, record_b, filter_fields=None):
     return record
 
 
-async def override_record(record, existing_record, overrides):
+def override_record(record, existing_record, overrides):
     """
     Removes fields from record if user has overriden them on airtable.
 
@@ -343,7 +343,7 @@ async def override_record(record, existing_record, overrides):
     return record
 
 
-async def compare_records(
+def compare_records(
     record_a, record_b, method, overrides=None, filter_fields=None
 ):
     """
@@ -377,7 +377,7 @@ async def compare_records(
         logger.warning("Invalid record format provided.")
 
 
-async def replace_values(field, value):
+def replace_values(field, value):
     # Simplify attachement objects
     if isinstance(value, list) and isinstance(value[0], dict):
         new_value = [{"url": obj["url"]} for obj in value if "url" in obj]
