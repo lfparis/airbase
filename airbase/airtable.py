@@ -22,14 +22,12 @@ from .urls import BASE_URL, META_URL
 from .validations import validate_records
 
 
-logger = Logger.start(__name__)
-
-
 class BaseAirtable:
     retries = 5
 
     def __init__(
         self,
+        logging_level: str = "info",
         raise_for_status: bool = False,
         verbose: bool = False,
     ):
@@ -41,6 +39,8 @@ class BaseAirtable:
             verbose (``string``): Log stack trace
 
         """  # noqa: E501
+        self.logging_level = logging_level
+        self.logger = Logger.start(str(self.__class__), level=logging_level)
         self.raise_for_status = raise_for_status
         self.verbose = verbose
 
@@ -88,7 +88,7 @@ class BaseAirtable:
         if self.raise_for_status:
             raise AirbaseException(error_msg)
         else:
-            logger.error(
+            self.logger.error(
                 error_msg, exc_info=self.verbose, stack_info=self.verbose
             )
 
@@ -146,7 +146,7 @@ class Airtable(BaseAirtable):
                         name=base["name"],
                         permission_level=base["permissionLevel"],
                         session=self._session,
-                        logging_level="info",
+                        logging_level=self.logging_level,
                         raise_for_status=self.raise_for_status,
                         verbose=self.verbose,
                     )
@@ -168,7 +168,7 @@ class Airtable(BaseAirtable):
                 return Base(
                     base_id=value,
                     session=self._session,
-                    logging_level="info",
+                    logging_level=self.logging_level,
                     raise_for_status=self.raise_for_status,
                     verbose=self.verbose,
                 )
@@ -201,7 +201,7 @@ class Airtable(BaseAirtable):
                 data["id"],
                 data,
                 session=self._session,
-                logging_level=logging_level,
+                logging_level=logging_level
             )
 
     async def get_table(self, base_id: str, table_name: str):
@@ -209,6 +209,7 @@ class Airtable(BaseAirtable):
         return Table(
             base,
             table_name,
+            logging_level=self.logging_level,
             raise_for_status=self.raise_for_status,
             verbose=self.verbose,
         )
@@ -220,7 +221,7 @@ class Account(BaseAirtable):
         enterprise_account_id,
         data=None,
         session=None,
-        logging_level="info",
+        **kwargs
     ):
         """
         Airtable class for an Enterprise Account.
@@ -232,10 +233,10 @@ class Account(BaseAirtable):
         Kwargs:
             logging_level (``string``, default="info"):
         """
+        super().__init__(**kwargs)
         self.id = enterprise_account_id
         self.url = f"{META_URL}/enterpriseAccounts/{self.id}"
         self._session = session
-        self.logging_level = logging_level
         if data:
             self.workspace_ids = data.get("workspaceIds")
             self.user_ids = data.get("userIds")
@@ -250,7 +251,6 @@ class Base(BaseAirtable):
         name=None,
         permission_level=None,
         session=None,
-        logging_level="info",
         **kwargs,
     ):
         """
@@ -272,8 +272,6 @@ class Base(BaseAirtable):
         self._session = session
         self.semaphore = HTTPSemaphore(value=50, interval=1, max_calls=5)
 
-        self.log = logging_level
-
     async def get_tables(self) -> Optional[List]:  # noqa: F821
         async with self.semaphore:
             url = f"{self.url}/tables"
@@ -288,6 +286,7 @@ class Base(BaseAirtable):
                         primary_field_id=table["primaryFieldId"],
                         fields=table["fields"],
                         views=table["views"],
+                        logging_level=self.logging_level,
                         raise_for_status=self.raise_for_status,
                         verbose=self.verbose,
                     )
@@ -310,6 +309,7 @@ class Base(BaseAirtable):
                 return Table(
                     self,
                     value,
+                    logging_level=self.logging_level,
                     raise_for_status=self.raise_for_status,
                     verbose=self.verbose,
                 )
@@ -416,8 +416,8 @@ class Table(BaseAirtable):
             return record.get("id")
 
     async def _multiple(
-        self, func, records: list, typecast: bool = False
-    ) -> bool:
+        self, func, records: Iterable[Dict], typecast: bool = False
+    ) -> Dict:
         """
         Posts/Patches/Deletes records to a table in batches of 10.
 
@@ -438,7 +438,13 @@ class Table(BaseAirtable):
         if any(not r for r in results):
             return False
         else:
-            return True
+            unpacked_results = []
+            for partial_result in results:
+                if partial_result.get("records"):
+                    unpacked_results.extend(partial_result["records"])
+                else:
+                    unpacked_results.append(partial_result)
+            return unpacked_results
 
     async def get_record(self, record_id: str) -> dict:
         """
@@ -455,12 +461,11 @@ class Table(BaseAirtable):
         data = await self._get_data(res)
         if self._is_success(res):
             val = data["fields"].get(self.primary_field_name) or record_id
-            logger.info(f"Fetched record: <{val}> from table: {self.name}")
-            return data
+            self.logger.info(f"Fetched record: <{val}> from table: {self.name}")  # noqa: E501
         else:
             error_msg = f"{res.status}: Failed to get record: <{record_id}> from table: {self.name} -> {data.get('error')}"  # noqa: E501
             self.raise_or_log_error(error_msg)
-            return {}
+        return data
 
     async def get_records(
         self,
@@ -492,11 +497,12 @@ class Table(BaseAirtable):
         while True:
             async with self.base.semaphore:
                 res = await self._request("get", self.url, params=params)
+            data = await self._get_data(res)
             if not self._is_success(res):
-                error_msg = f"Records for Table: {self.name} could not be retreived."  # noqa: E501
+                error_msg = f"{res.status}: Records for Table: {self.name} could not be retreived -> {data.get('error')}"  # noqa: E501
                 self.raise_or_log_error(error_msg)
                 break
-            data = await self._get_data(res)
+
             try:
                 records.extend(data["records"])
             except (AttributeError, KeyError, TypeError):
@@ -508,7 +514,7 @@ class Table(BaseAirtable):
                 break
 
         if len(records) != 0:
-            logger.info(
+            self.logger.info(
                 f"Fetched {len(records)} records from table: {self.name}"
             )
             self.records = records
@@ -516,7 +522,9 @@ class Table(BaseAirtable):
             self.records = []
         return self.records
 
-    async def post_record(self, record: dict, typecast: bool = False) -> bool:
+    async def post_record(
+        self, record: Dict, typecast: bool = False
+    ) -> Dict:
         """
         Adds a record to a table.
 
@@ -526,9 +534,6 @@ class Table(BaseAirtable):
             message (``string``, optional): Custom logger message.
         """
         await validate_records(record, record_id=False)
-        message = self._get_record_primary_key_value_or_id(
-            record
-        ) or self._basic_log_msg(record)
 
         headers = {"Content-Type": "application/json"}
         data = {"fields": record["fields"]}
@@ -538,18 +543,22 @@ class Table(BaseAirtable):
             res = await self._request(
                 "post", self.url, json=data, headers=headers
             )
+
+        data = await self._get_data(res)
+        message = self._get_record_primary_key_value_or_id(
+            data
+        ) or self._basic_log_msg(data)
+
         if self._is_success(res):
-            logger.info(f"Posted: {message}")
-            return True
+            self.logger.info(f"Posted: {message}")
         else:
-            data = await self._get_data(res)
             error_msg = f"{res.status}: Failed to post: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
-            return False
+        return data
 
     async def _post_records(
-        self, records: list, typecast: bool = False
-    ) -> bool:
+        self, records: Iterable[Dict], typecast: bool = False
+    ) -> Dict:
         headers = {"Content-Type": "application/json"}
         message = self._basic_log_msg(records)
 
@@ -562,17 +571,17 @@ class Table(BaseAirtable):
             res = await self._session.request(
                 "post", self.url, json=data, headers=headers
             )
+        data = await self._get_data(res)
+
         if self._is_success(res):
-            logger.info(f"Posted: {message}")
-            return True
+            self.logger.info(f"Posted: {message}")
         else:
-            data = await self._get_data(res)
             error_msg = f"{res.status}: Failed to post: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
-            return False
+        return data
 
     async def post_records(
-        self, records: list, typecast: bool = False
+        self, records: Iterable[Dict], typecast: bool = False
     ) -> None:
         """
         Adds records to a table in batches of 10.
@@ -586,8 +595,8 @@ class Table(BaseAirtable):
         return await self._multiple(self._post_records, records, typecast)
 
     async def update_record(
-        self, record: dict, typecast: bool = False
-    ) -> bool:
+        self, record: Dict, typecast: bool = False
+    ) -> Dict:
         """
         Updates a record in a table.
 
@@ -610,18 +619,22 @@ class Table(BaseAirtable):
             data["typecast"] = True
         async with self.base.semaphore:
             res = await self._request("patch", url, json=data, headers=headers)
+
+        data = await self._get_data(res)
+        message = self._get_record_primary_key_value_or_id(
+            data
+        ) or self._basic_log_msg(data)
+
         if self._is_success(res):
-            logger.info(f"Updated: {message}")
-            return True
+            self.logger.info(f"Updated: {message}")
         else:
-            data = await self._get_data(res)
             error_msg = f"{res.status}: Failed to update: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
-            return False
+        return data
 
     async def _update_records(
-        self, records: list, typecast: bool = False
-    ) -> bool:
+        self, records: Iterable[Dict], typecast: bool = False
+    ) -> Dict:
         headers = {"Content-Type": "application/json"}
         message = self._basic_log_msg(records)
         data = {
@@ -636,18 +649,17 @@ class Table(BaseAirtable):
             res = await self._request(
                 "patch", self.url, headers=headers, json=data
             )
+        data = await self._get_data(res)
         if self._is_success(res):
-            logger.info(f"Updated: {message}")
-            return True
+            self.logger.info(f"Updated: {message}")
         else:
-            data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to update: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            error_msg = f"{res.status}: Failed to update: {message} -> '{data.get('error').get('type')}:{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
-            return False
+        return data
 
     async def update_records(
-        self, records: list, typecast: bool = False
-    ) -> bool:
+        self, records: Iterable[Dict], typecast: bool = False
+    ) -> Dict:
         """
         Updates records in a table in batches of 10.
 
@@ -659,7 +671,7 @@ class Table(BaseAirtable):
         await validate_records(records)
         return await self._multiple(self._update_records, records, typecast)
 
-    async def delete_record(self, record: dict) -> bool:
+    async def delete_record(self, record: Dict) -> Dict:
         """
         Deletes a record from a table.
 
@@ -674,16 +686,20 @@ class Table(BaseAirtable):
         url = self._add_record_to_url(record["id"])
         async with self.base.semaphore:
             res = await self._session.request("delete", url)
+        data = await self._get_data(res)
+
         if self._is_success(res):
-            logger.info(f"Deleted: {message}")
-            return True
+            self.logger.info(f"Deleted: {message}")
+            return data
         else:
             data = await self._get_data(res)
             error_msg = f"{res.status}: Failed to delete: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
-            return False
+            return data
 
-    async def _delete_records(self, records: list, *args, **kwargs) -> bool:
+    async def _delete_records(
+        self, records: Iterable[Dict], *args, **kwargs
+    ) -> Dict:
         """
         Deletes records from a table in batches of 10.
 
@@ -702,16 +718,17 @@ class Table(BaseAirtable):
             res = await self._request(
                 "delete", self.url, params=params, headers=headers
             )
+        data = await self._get_data(res)
         if self._is_success(res):
-            logger.info(f"Deleted: {message}")
-            return True
+            self.logger.info(f"Deleted: {message}")
+            return data
         else:
             data = await self._get_data(res)
-            error_msg = f"{res.status}: Failed to delete: {message} -> '{data.get('error').get('message')}'"  # noqa:E501
+            error_msg = f"{res.status}: Failed to delete: {message} -> '{data.get('error').get('type')}:{data.get('error').get('message')}'"  # noqa:E501
             self.raise_or_log_error(error_msg)
-            return False
+            return data
 
-    async def delete_records(self, records: list) -> bool:
+    async def delete_records(self, records: Iterable[Dict]) -> Dict:
         """
         Deletes records in a table in batches of 10.
 
