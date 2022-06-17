@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import asyncio
 import os
+import re
 import urllib
 
 from aiohttp import (
@@ -14,7 +15,7 @@ from aiohttp import (
     ClientResponse,
 )
 from json.decoder import JSONDecodeError
-from typing import Any, Dict, Iterable, List, Optional  # Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from .exceptions import AirbaseException
 from .utils import Logger, HTTPSemaphore
@@ -40,9 +41,16 @@ class BaseAirtable:
 
         """  # noqa: E501
         self.logging_level = logging_level
-        self.logger = Logger.start(str(self.__class__), level=logging_level)
+        self.logger = Logger.start(str(self), level=logging_level)
         self.raise_for_status = raise_for_status
         self.verbose = verbose
+
+    def __str__(self):
+        obj = re.search(r"(?<=\.)[\w\d_]*(?='>$)", str(self.__class__))[0]
+        if getattr(self, 'name', None):
+            return f"<{obj}:'{getattr(self, 'name')}' at {hex(id(self))}>"
+        else:
+            return f"<{obj} at {hex(id(self))}>"
 
     def _is_success(self, res: Optional[ClientResponse]) -> bool:
         if res and res.status >= 200 and res.status < 300:
@@ -72,7 +80,7 @@ class BaseAirtable:
             ):
                 err = True
 
-            if err or res.status in (408, 429, 503, 504):
+            if err or res.status in (408, 429, 500, 502, 503, 504):
                 delay = (2 ** count) * 0.51
                 count += 1
                 if count > self.retries:
@@ -91,6 +99,26 @@ class BaseAirtable:
             self.logger.error(
                 error_msg, exc_info=self.verbose, stack_info=self.verbose
             )
+
+    def get_error_message(
+        self,
+        method: str,
+        obj: str,
+        res: Union[ClientResponse, None] = None,
+        data: Union[ClientResponse, None] = None,
+    ):
+        status = f"{res.status}: " if res else ""
+        error = data.get('error') or '' if data else ''
+        error_type = error.get('type') if error else None
+        error_message = error.get('message') if error else None
+        if error_type and error_message:
+            message = f" -> <{error_type}: {error_message}>"
+        elif error_type or error_message:
+            message = f" -> <{error_type or error_message}>"
+        else:
+            message = ""
+
+        return f"{status}Failed to {method} {obj}{message}"
 
 
 class Airtable(BaseAirtable):
@@ -160,9 +188,15 @@ class Airtable(BaseAirtable):
                 ]
                 self._bases_by_id = {base.id: base for base in self.bases}
                 self._bases_by_name = {base.name: base for base in self.bases}
+                self.logger.info(f"Fetched: {len(self.bases)} bases")
 
             else:
-                error_msg = f"{res.status}: Failed to get bases -> '{data.get('error').get('type')}'"  # noqa:E501
+                error_msg = self.get_error_message(
+                    method="get",
+                    obj='bases',
+                    res=res,
+                    data=data,
+                )
                 self.raise_or_log_error(error_msg)
                 self.bases = None
         return self.bases
@@ -193,7 +227,10 @@ class Airtable(BaseAirtable):
                 if bases:
                     return bases[0]
         else:
-            error_msg = "Failed to get base."  # noqa:E501
+            error_msg = self.get_error_message(
+                method="get",
+                obj='base',
+            )
             self.raise_or_log_error(error_msg)
 
     async def get_enterprise_account(
@@ -201,14 +238,23 @@ class Airtable(BaseAirtable):
     ):
         url = f"{META_URL}/enterpriseAccounts/{enterprise_account_id}"
         res = await self._session.request("get", url)
-        if Airtable._is_success(res):
-            data = await Airtable._get_data(res)
+        data = await self._get_data(res)
+        if self._is_success(res):
             return Account(
                 data["id"],
                 data,
                 session=self._session,
                 logging_level=logging_level
             )
+        else:
+            error_msg = self.get_error_message(
+                method="get",
+                obj='entreprise account',
+                res=res,
+                data=data,
+            )
+            self.raise_or_log_error(error_msg)
+            return None
 
     async def get_table(self, base_id: str, table_name: str):
         base = await self.get_base(value=base_id, key="id")
@@ -303,7 +349,12 @@ class Base(BaseAirtable):
                     table.name: table for table in self.tables
                 }
             else:
-                error_msg = f"{res.status}: Failed to get tables -> '{data.get('error').get('type')}'"  # noqa:E501
+                error_msg = self.get_error_message(
+                    method="get",
+                    obj='tables',
+                    res=res,
+                    data=data,
+                )
                 self.raise_or_log_error(error_msg)
                 self.tables = None
         return self.tables
@@ -334,7 +385,10 @@ class Base(BaseAirtable):
                 if tables:
                     return tables[0]
         else:
-            error_msg = "Failed to get table'"  # noqa:E501
+            error_msg = self.get_error_message(
+                method="get",
+                obj='table',
+            )
             self.raise_or_log_error(error_msg)
 
 

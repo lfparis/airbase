@@ -3,7 +3,7 @@ import logging
 
 class Logger(object):
     @staticmethod
-    def start(name, level="info"):
+    def start(name, level : str = "info"):
         LOG_FORMAT = "%(asctime)s (%(name)s): %(levelname)s - %(message)s"
         DATE_FORMAT = "%Y-%m-%d %H:%M:%S (UTC/GMT %z)"
 
