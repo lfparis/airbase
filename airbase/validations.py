@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from typing import Iterable, Union
+from typing import Dict, Iterable, Union
 
 from .exceptions import AirbaseException
 
@@ -35,7 +35,7 @@ PERMISSION_LEVELS = ("read", "comment", "edit", "create")
 
 
 async def validate_records(
-    records: Union[Iterable[dict], dict], record_id=True, fields=True
+    records: Union[Iterable[Dict], Dict], record_id=True, fields=True
 ) -> None:
     """
     Validates a Record or Records. Raises an AirbaseException if invalid.

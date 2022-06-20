@@ -7,7 +7,7 @@ setup(
     author="Luis Felipe Paris",
     author_email="lfparis@gmail.com",
     url="https://github.com/lfparis/airbase",
-    version="0.0.1b10",
+    version="0.0.1b11",
     install_requires=["aiohttp"],
     extras_require={"tools": ["pandas"]},
     package_data={"airbase": ["py.typed"]},
@@ -24,6 +24,7 @@ setup(
         "Topic :: Software Development",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: Implementation :: CPython",
     ],
 )
