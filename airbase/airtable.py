@@ -48,7 +48,7 @@ class BaseAirtable:
 
     def __str__(self):
         obj = re.search(r"(?<=\.)[\w\d_]*(?='>$)", str(self.__class__))[0]
-        if getattr(self, 'name', None):
+        if getattr(self, "name", None):
             return f"<{obj}:'{getattr(self, 'name')}' at {hex(id(self))}>"
         else:
             return f"<{obj} at {hex(id(self))}>"
@@ -82,7 +82,7 @@ class BaseAirtable:
                 err = True
 
             if err or res.status in (408, 429, 500, 502, 503, 504):
-                delay = (2 ** count) * 0.51
+                delay = (2**count) * 0.51
                 count += 1
                 if count > self.retries:
                     # res may not be defined at this point
@@ -93,7 +93,12 @@ class BaseAirtable:
             else:
                 return res
 
-    def raise_or_log_error(self, error_msg: str) -> None:
+    async def raise_or_log_error(
+        self,
+        res: Optional[ClientResponse],
+        error_msg: str = "",
+    ) -> None:
+        error_msg = await self.get_error_message(res) if res else error_msg
         if self.raise_for_status:
             raise AirbaseException(error_msg)
         else:
@@ -101,25 +106,44 @@ class BaseAirtable:
                 error_msg, exc_info=self.verbose, stack_info=self.verbose
             )
 
-    def get_error_message(
-        self,
-        method: str,
-        obj: str,
-        res: Union[ClientResponse, None] = None,
-        data: Union[ClientResponse, None] = None,
-    ) -> str:
-        status = f"{res.status}: " if res else ""
-        error = data.get('error') or '' if data else ''
-        error_type = error.get('type') if error else None
-        error_message = error.get('message') if error else None
-        if error_type and error_message:
-            message = f" -> <{error_type}: {error_message}>"
-        elif error_type or error_message:
-            message = f" -> <{error_type or error_message}>"
-        else:
-            message = ""
+    async def get_error_message(self, res: ClientResponse) -> str:
+        data = await self._get_data(res)
 
-        return f"{status}Failed to {method} {obj}{message}"
+        error = data.get("error") if data else None
+        error_type = None
+        error_message = None
+        if error:
+            if isinstance(error, dict):
+                error_type = error.get("type")
+                error_message = error.get("message")
+            elif isinstance(error, str):
+                error_type = error
+
+        if "meta" in res.url.parts:
+            obj = res.url.parts[-1]
+            base = (
+                f"'{{'base': '{res.url.parts[4]}'}}'"
+                if len(res.url.parts) > 4
+                else None
+            )
+            resource_info = f" {obj}{' from ' if base else ''}{base if base else ''}"  # noqa: E501
+
+        else:
+            preposition = "from" if res.method.lower() == "get" else "to"
+            base = f"'base': '{res.url.parts[2]}'"
+            table = f"'table': '{res.url.parts[3]}'"
+            resource_info = f" record{'s' if len(res.url.parts) < 5 else ''} {preposition}: '{{{base}, {table}}}'"  # noqa: E501
+
+        if error_type and error_message:
+            message = f"{{'type': '{error_type}', 'message': '{error_message}'}}"  # noqa: E501
+        elif error_type:
+            message = f"{{'type': '{error_type}'}}"
+        elif error_message:
+            message = f"{{'message': '{error_message}'}}"
+        else:
+            message = "No error info"
+
+        return f"{res.status} - {res.reason}: Failed to {res.method.lower()}{resource_info} -> '{message}'"  # noqa: E501
 
 
 class Airtable(BaseAirtable):
@@ -193,13 +217,7 @@ class Airtable(BaseAirtable):
                 self.logger.info(f"Fetched: {len(self.bases)} bases")
 
             else:
-                error_msg = self.get_error_message(
-                    method="get",
-                    obj='bases',
-                    res=res,
-                    data=data,
-                )
-                self.raise_or_log_error(error_msg)
+                await self.raise_or_log_error(res)
                 self.bases = None
         return self.bases
 
@@ -232,14 +250,13 @@ class Airtable(BaseAirtable):
                 if bases:
                     base = bases[0]
             if base:
-                self.logger.info(f"Fetched Base with {key if key else 'value'}: {value}")  # noqa: E501
+                self.logger.info(
+                    f"Fetched Base with {key if key else 'value'}: '{value}'"
+                )  # noqa: E501
                 return base
         else:
-            error_msg = self.get_error_message(
-                method="get",
-                obj='base',
-            )
-            self.raise_or_log_error(error_msg)
+            error_msg = f"ERROR: Base with {key if key else 'value'}:'{value}' not found"  # noqa: E501
+            await self.raise_or_log_error(None, error_msg=error_msg)
             return None
 
     async def get_enterprise_account(
@@ -247,23 +264,17 @@ class Airtable(BaseAirtable):
     ) -> Optional[Account]:
         url = f"{META_URL}/enterpriseAccounts/{enterprise_account_id}"
         res = await self._session.request("get", url)
-        data = await self._get_data(res)
         if self._is_success(res):
-            self.logger.info(f"Fetched Account with id: {data.get('id')}")
+            data = await self._get_data(res)
+            self.logger.info(f"Fetched Account with id: '{data.get('id')}'")
             return Account(
                 data["id"],
                 data,
                 session=self._session,
-                logging_level=self.logging_level
+                logging_level=self.logging_level,
             )
         else:
-            error_msg = self.get_error_message(
-                method="get",
-                obj='entreprise account',
-                res=res,
-                data=data,
-            )
-            self.raise_or_log_error(error_msg)
+            await self.raise_or_log_error(res)
             return None
 
     async def get_table(
@@ -271,7 +282,7 @@ class Airtable(BaseAirtable):
     ) -> Optional[Table]:
         base = await self.get_base(value=base_id, key="id")
         if base:
-            self.logger.info(f"Created Table object with name: {table_name}")
+            self.logger.info(f"Created Table object with name: '{table_name}'")
             return Table(
                 base,
                 table_name,
@@ -280,18 +291,14 @@ class Airtable(BaseAirtable):
                 verbose=self.verbose,
             )
         else:
-            error_msg = f"Base with id: {base_id} does not exist or invalid permissions to access this resource."  # noqa: E501
-            self.raise_or_log_error(error_msg)
+            error_msg = f"ERROR: Failed to create Table object with name: {table_name} for base with id:'{base_id}'"  # noqa: E501
+            await self.raise_or_log_error(None, error_msg=error_msg)
             return None
 
 
 class Account(BaseAirtable):
     def __init__(
-        self,
-        enterprise_account_id,
-        data=None,
-        session=None,
-        **kwargs
+        self, enterprise_account_id, data=None, session=None, **kwargs
     ) -> None:
         """
         Airtable class for an Enterprise Account.
@@ -346,8 +353,8 @@ class Base(BaseAirtable):
         async with self.semaphore:
             url = f"{self.url}/tables"
             res = await self._request("get", url)
-            data = await self._get_data(res)
             if self._is_success(res):
+                data = await self._get_data(res)
                 self.tables = [
                     Table(
                         self,
@@ -368,13 +375,7 @@ class Base(BaseAirtable):
                 }
                 self.logger.info(f"Fetched: {len(self.tables)} bases")
             else:
-                error_msg = self.get_error_message(
-                    method="get",
-                    obj='tables',
-                    res=res,
-                    data=data,
-                )
-                self.raise_or_log_error(error_msg)
+                await self.raise_or_log_error(res)
                 self.tables = None
         return self.tables
 
@@ -407,14 +408,13 @@ class Base(BaseAirtable):
                 if tables:
                     table = tables[0]
             if table:
-                self.logger.info(f"Fetched Table with {key if key else 'value'}: {value}")  # noqa: E501
+                self.logger.info(
+                    f"Fetched Table with {key if key else 'value'}: {value}"
+                )  # noqa: E501
                 return table
         else:
-            error_msg = self.get_error_message(
-                method="get",
-                obj='table',
-            )
-            self.raise_or_log_error(error_msg)
+            error_msg = f"ERROR: Table with {key if key else 'value'}:'{value}' not found"  # noqa: E501
+            await self.raise_or_log_error(None, error_msg=error_msg)
             return None
 
 
@@ -555,15 +555,11 @@ class Table(BaseAirtable):
         ) or self._basic_log_msg(data)
 
         if self._is_success(res):
-            self.logger.info(f"{operation.title()}{'e' if operation[-1] != 'e' else ''}d: {message}")  # noqa: E501
-        else:
-            error_msg = self.get_error_message(
-                method=operation,
-                obj=message,
-                res=res,
-                data=data,
+            self.logger.info(
+                f"{operation.title()}{'e' if operation[-1] != 'e' else ''}d: {message}"  # noqa: E501
             )
-            self.raise_or_log_error(error_msg)
+        else:
+            await self.raise_or_log_error(res)
         return data
 
     @chunkify
@@ -622,15 +618,11 @@ class Table(BaseAirtable):
         data = await self._get_data(res)
 
         if self._is_success(res):
-            self.logger.info(f"{operation.title()}{'e' if operation[-1] != 'e' else ''}d: {message}")  # noqa: E501
-        else:
-            error_msg = self.get_error_message(
-                method=operation,
-                obj=message,
-                res=res,
-                data=data,
+            self.logger.info(
+                f"{operation.title()}{'e' if operation[-1] != 'e' else ''}d: {message}"  # noqa: E501
             )
-            self.raise_or_log_error(error_msg)
+        else:
+            await self.raise_or_log_error(res)
         return data
 
     async def get_record(self, record_id: str) -> dict:
@@ -677,12 +669,11 @@ class Table(BaseAirtable):
         while True:
             async with self.base.semaphore:
                 res = await self._request("get", self.url, params=params)
-            data = await self._get_data(res)
             if not self._is_success(res):
-                error_msg = f"{res.status}: Records for Table: {self.name} could not be retreived -> {data.get('error')}"  # noqa: E501
-                self.raise_or_log_error(error_msg)
+                # error_msg = f"{res.status}: Records for Table: {self.name} could not be retreived -> {data.get('error')}"  # noqa: E501
+                await self.raise_or_log_error(res)
                 break
-
+            data = await self._get_data(res)
             try:
                 records.extend(data["records"])
             except (AttributeError, KeyError, TypeError):
@@ -702,9 +693,7 @@ class Table(BaseAirtable):
             self.records = []
         return self.records
 
-    async def post_record(
-        self, record: Dict, typecast: bool = False
-    ) -> Dict:
+    async def post_record(self, record: Dict, typecast: bool = False) -> Dict:
         """
         Adds a record to a table.
 
@@ -771,9 +760,7 @@ class Table(BaseAirtable):
         """  # noqa: E501
         await validate_records(records)
         return await self._request_records(
-            method="patch",
-            records=records,
-            typecast=typecast
+            method="patch", records=records, typecast=typecast
         )
 
     async def delete_record(self, record: Dict) -> Dict:
