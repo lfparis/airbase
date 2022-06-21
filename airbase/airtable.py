@@ -102,7 +102,10 @@ class BaseAirtable:
             await self.get_error_message(response) if response else error_msg
         )
         if self.raise_for_status:
-            raise AirbaseResponseException(error_msg, response=response)
+            if response:
+                raise AirbaseResponseException(error_msg, response=response)
+            else:
+                raise AirbaseException(error_msg)
         else:
             self.logger.error(
                 error_msg, exc_info=self.verbose, stack_info=self.verbose
