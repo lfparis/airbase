@@ -7,7 +7,7 @@ setup(
     author="Luis Felipe Paris",
     author_email="lfparis@gmail.com",
     url="https://github.com/lfparis/airbase",
-    version="0.0.1b11",
+    version="0.0.1b12",
     install_requires=["aiohttp"],
     extras_require={"tools": ["pandas"]},
     package_data={"airbase": ["py.typed"]},

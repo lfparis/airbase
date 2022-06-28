@@ -257,7 +257,7 @@ class Airtable(BaseAirtable):
             if base:
                 self.logger.info(
                     f"Fetched Base with {key if key else 'value'}: '{value}'"
-                )  # noqa: E501
+                )
                 return base
         else:
             error_msg = f"Base with {key if key else 'value'}:'{value}' not found"  # noqa: E501
@@ -415,7 +415,7 @@ class Base(BaseAirtable):
             if table:
                 self.logger.info(
                     f"Fetched Table with {key if key else 'value'}: {value}"
-                )  # noqa: E501
+                )
                 return table
         else:
             error_msg = f"Table with {key if key else 'value'}:'{value}' not found"  # noqa: E501
@@ -675,7 +675,6 @@ class Table(BaseAirtable):
             async with self.base.semaphore:
                 res = await self._request("get", self.url, params=params)
             if not self._is_success(res):
-                # error_msg = f"{res.status}: Records for Table: {self.name} could not be retreived -> {data.get('error')}"  # noqa: E501
                 await self.raise_or_log_error(response=res)
                 break
             data = await self._get_data(res)
