@@ -1,0 +1,19 @@
+dist: bionic
+language: python
+git:
+  depth: 2
+python:
+  - "3.7"
+  - "3.8"
+matrix:
+  include:
+    python: "3.7"
+    env: TOXENV=lint
+install:
+  - pip install .
+  - pip install tox tox-travis
+script: tox
+after_success:
+  - pip install pytest pytest-asyncio aiohttp coveralls
+  - coverage run --source=airbase setup.py test
+  - coveralls

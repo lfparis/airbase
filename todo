@@ -1,0 +1,9 @@
+Todos:
+    Table():
+        self.get_records():
+            [] filter_by_fields convert array to urlencoded string
+    Logger, level, etc
+
+    Airtable():
+        self.semaphore should be restricted to calls to META_URL,
+        and each base should have it's own semaphore.
